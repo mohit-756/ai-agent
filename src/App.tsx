@@ -8,6 +8,7 @@ import { ExpensesView } from './components/ExpensesView';
 import { BudgetsView } from './components/BudgetsView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AIAssistantView } from './components/AIAssistantView';
+import { WhatsAppHubView } from './components/WhatsAppHubView';
 import { ExpenseService } from './services/expenseService';
 import { BudgetService } from './services/budgetService';
 import { AIFinanceService } from './services/aiFinanceService';
@@ -83,6 +84,11 @@ export function App() {
     showToast('Category budget updated');
   };
 
+  const handleExpenseAddedByWhatsApp = () => {
+    setExpenses(ExpenseService.getExpenses());
+    showToast('Expense logged via WhatsApp!');
+  };
+
   const insightsCount = AIFinanceService.generateSpendingInsights(expenses, budgets).length;
 
   return (
@@ -150,6 +156,12 @@ export function App() {
           <AIAssistantView
             expenses={expenses}
             budgets={budgets}
+          />
+        )}
+
+        {activeTab === 'whatsapp' && (
+          <WhatsAppHubView
+            onExpenseAddedByWhatsApp={handleExpenseAddedByWhatsApp}
           />
         )}
 

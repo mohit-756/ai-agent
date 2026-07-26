@@ -23,6 +23,7 @@ export interface Expense {
   createdAt: string; // ISO string
   notes?: string;
   tags?: string[];
+  source?: 'manual' | 'whatsapp' | 'nlp';
 }
 
 export interface Budget {
@@ -72,6 +73,15 @@ export interface ChatMessage {
     title?: string;
     items?: Array<{ label: string; value: string }>;
   };
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  body: string;
+  timestamp: string;
+  status?: 'delivered' | 'read' | 'sent';
+  expenseAdded?: Expense;
 }
 
 export interface NLPParseResult {

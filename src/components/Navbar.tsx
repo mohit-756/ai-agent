@@ -8,10 +8,11 @@ import {
   Plus, 
   Sparkles,
   RotateCcw,
-  IndianRupee
+  IndianRupee,
+  MessageSquare
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'expenses' | 'budgets' | 'analytics' | 'ai-assistant';
+export type ActiveTab = 'dashboard' | 'expenses' | 'budgets' | 'analytics' | 'ai-assistant' | 'whatsapp';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -35,7 +36,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'expenses' as ActiveTab, label: 'Expenses', icon: Receipt, badge: totalExpensesCount },
     { id: 'budgets' as ActiveTab, label: 'Budgets', icon: PieChart },
     { id: 'analytics' as ActiveTab, label: 'Analytics', icon: BarChart3 },
-    { id: 'ai-assistant' as ActiveTab, label: 'AI Assistant', icon: Bot, highlight: true, badge: unreadInsightsCount > 0 ? unreadInsightsCount : undefined }
+    { id: 'ai-assistant' as ActiveTab, label: 'AI Assistant', icon: Bot, highlight: true, badge: unreadInsightsCount > 0 ? unreadInsightsCount : undefined },
+    { id: 'whatsapp' as ActiveTab, label: 'WhatsApp Bot', icon: MessageSquare, isWhatsapp: true }
   ];
 
   return (
@@ -71,15 +73,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`relative flex items-center space-x-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                      ? item.isWhatsapp 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                        : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                      : item.isWhatsapp
+                      ? 'text-emerald-400 hover:text-white hover:bg-emerald-950/40'
                       : item.highlight
                       ? 'text-indigo-300 hover:text-white hover:bg-slate-800/60'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.highlight ? 'text-indigo-400' : ''}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.isWhatsapp ? 'text-emerald-400' : item.highlight ? 'text-indigo-400' : ''}`} />
                   <span>{item.label}</span>
                   
                   {item.badge !== undefined && item.badge > 0 && (
