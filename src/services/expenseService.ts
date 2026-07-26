@@ -221,7 +221,7 @@ export class ExpenseService {
             category: item.category as Category,
             description: item.description,
             merchant: item.merchant,
-            paymentMethod: item.paymentMethod,
+            paymentMethod: item.payment_method || item.paymentMethod, // Support both snake_case and fallback
             date: item.date,
             createdAt: item.createdAt || item.created_at,
             notes: item.notes,
@@ -256,7 +256,7 @@ export class ExpenseService {
         category: newExpense.category,
         description: newExpense.description,
         merchant: newExpense.merchant,
-        paymentMethod: newExpense.paymentMethod,
+        payment_method: newExpense.paymentMethod,
         date: newExpense.date,
         notes: newExpense.notes,
         source: newExpense.source
@@ -285,7 +285,7 @@ export class ExpenseService {
           category: updatedExpense.category,
           description: updatedExpense.description,
           merchant: updatedExpense.merchant,
-          paymentMethod: updatedExpense.paymentMethod,
+          payment_method: updatedExpense.paymentMethod,
           date: updatedExpense.date,
           notes: updatedExpense.notes
         })
@@ -331,7 +331,7 @@ export class ExpenseService {
           category: e.category,
           description: e.description,
           merchant: e.merchant,
-          paymentMethod: e.paymentMethod,
+          payment_method: e.paymentMethod,
           date: e.date,
           notes: e.notes,
           source: 'manual'
