@@ -1,4 +1,5 @@
 import type { Expense, Category } from '../types/expense';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const EXPENSES_STORAGE_KEY = 'ai_expense_tracker_expenses';
 
@@ -201,16 +202,69 @@ export class ExpenseService {
     localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(expenses));
   }
 
+  /**
+   * Sync from cloud database in background
+   */
+  public static async syncFromCloud(): Promise<Expense[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (error) throw error;
+        if (data) {
+          const formatted: Expense[] = data.map(item => ({
+            id: item.id.toString(),
+            amount: item.amount,
+            category: item.category as Category,
+            description: item.description,
+            merchant: item.merchant,
+            paymentMethod: item.paymentMethod,
+            date: item.date,
+            createdAt: item.createdAt || item.created_at,
+            notes: item.notes,
+            source: item.source
+          }));
+          this.saveExpenses(formatted);
+          return formatted;
+        }
+      } catch (err) {
+        console.error('Failed to sync from Supabase:', err);
+      }
+    }
+    return this.getExpenses();
+  }
+
   public static addExpense(expense: Omit<Expense, 'id' | 'createdAt'>): Expense {
     const expenses = this.getExpenses();
     const newExpense: Expense = {
       ...expense,
       id: `exp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      source: expense.source || 'manual'
     };
 
     const updated = [newExpense, ...expenses];
     this.saveExpenses(updated);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase) {
+      supabase.from('expenses').insert([{
+        amount: newExpense.amount,
+        category: newExpense.category,
+        description: newExpense.description,
+        merchant: newExpense.merchant,
+        paymentMethod: newExpense.paymentMethod,
+        date: newExpense.date,
+        notes: newExpense.notes,
+        source: newExpense.source
+      }]).then(({ error }) => {
+        if (error) console.error('Error syncing addExpense to Supabase:', error);
+      });
+    }
+
     return newExpense;
   }
 
@@ -222,6 +276,25 @@ export class ExpenseService {
     const updatedExpense = { ...expenses[index], ...updatedFields };
     expenses[index] = updatedExpense;
     this.saveExpenses(expenses);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !id.startsWith('exp-')) {
+      supabase.from('expenses')
+        .update({
+          amount: updatedExpense.amount,
+          category: updatedExpense.category,
+          description: updatedExpense.description,
+          merchant: updatedExpense.merchant,
+          paymentMethod: updatedExpense.paymentMethod,
+          date: updatedExpense.date,
+          notes: updatedExpense.notes
+        })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing updateExpense to Supabase:', error);
+        });
+    }
+
     return updatedExpense;
   }
 
@@ -231,11 +304,43 @@ export class ExpenseService {
     if (filtered.length === expenses.length) return false;
 
     this.saveExpenses(filtered);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !id.startsWith('exp-')) {
+      supabase.from('expenses')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing deleteExpense to Supabase:', error);
+        });
+    }
+
     return true;
   }
 
   public static resetDemoData(): Expense[] {
     this.saveExpenses(INITIAL_TRANSACTIONS);
+    
+    // Clear Supabase in background if configured
+    if (isSupabaseConfigured && supabase) {
+      const client = supabase;
+      client.from('expenses').delete().neq('amount', 0).then(() => {
+        // Seed database
+        client.from('expenses').insert(INITIAL_TRANSACTIONS.map(e => ({
+          amount: e.amount,
+          category: e.category,
+          description: e.description,
+          merchant: e.merchant,
+          paymentMethod: e.paymentMethod,
+          date: e.date,
+          notes: e.notes,
+          source: 'manual'
+        }))).then(({ error }) => {
+          if (error) console.error('Error seeding demo data to Supabase:', error);
+        });
+      });
+    }
+
     return INITIAL_TRANSACTIONS;
   }
 }

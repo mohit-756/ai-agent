@@ -27,12 +27,17 @@ export function App() {
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load initial data
+  // Load initial data & Sync with Database
   useEffect(() => {
     const loadedExpenses = ExpenseService.getExpenses();
     const loadedBudgets = BudgetService.getBudgets();
     setExpenses(loadedExpenses);
     setBudgets(loadedBudgets);
+
+    // Fetch from Supabase cloud database in background
+    ExpenseService.syncFromCloud().then(cloudExpenses => {
+      setExpenses(cloudExpenses);
+    });
   }, []);
 
   const showToast = (msg: string) => {
