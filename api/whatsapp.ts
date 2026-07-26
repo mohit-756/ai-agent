@@ -129,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               category: parsed.category,
               description: parsed.description,
               merchant: parsed.merchant,
-              payment_method: parsed.paymentMethod, // Fix case mapping to match standard snake_case column
+              paymentmethod: parsed.paymentMethod, // Match all-lowercase DB column name exactly
               date: parsed.date,
               notes: `WhatsApp message from ${fromNumber}`,
               source: 'whatsapp'
