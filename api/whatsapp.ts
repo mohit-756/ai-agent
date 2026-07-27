@@ -173,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // Step D: Send base64 to Gemini for OCR extraction
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
             const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
 1. Total amount paid (number only)
 2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
