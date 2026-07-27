@@ -24,6 +24,7 @@ export interface Expense {
   notes?: string;
   tags?: string[];
   source?: 'manual' | 'whatsapp' | 'nlp';
+  receiptUrl?: string; // Cloud database link to the physical bill image
 }
 
 export interface Budget {

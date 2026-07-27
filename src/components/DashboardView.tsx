@@ -39,11 +39,11 @@ interface DashboardViewProps {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Food & Dining': '#f59e0b', // Amber
+  'Food & Dining': '#eab308', // Yellow
   'Transportation': '#3b82f6', // Blue
   'Shopping & Retail': '#ec4899', // Pink
   'Bills & Utilities': '#10b981', // Emerald
-  'Entertainment': '#8b5cf6', // Purple
+  'Entertainment': '#a855f7', // Purple
   'Health & Wellness': '#ef4444', // Red
   'Travel': '#06b6d4', // Cyan
   'Education': '#6366f1', // Indigo
@@ -121,35 +121,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="space-y-6 pb-12">
 
       {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 p-6 sm:p-8 border border-indigo-500/20 shadow-2xl">
-        <div className="absolute -right-16 -top-16 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl" />
+      <div className="relative overflow-hidden rounded-3xl bg-slate-900/20 border border-slate-900 p-6 sm:p-8 shadow-sm">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 text-indigo-300 text-xs font-semibold mb-1">
-              <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-              <span>AI AGENT DASHBOARD</span>
+            <div className="flex items-center space-x-2 text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>SpendWise AI Agent</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
+            <h1 className="text-2xl sm:text-3xl font-outfit font-black tracking-tight text-white">
               Hello Mohit 👋
             </h1>
-            <p className="text-slate-300 text-sm mt-1 max-w-xl">
-              Here is your financial status for {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. Your AI Assistant has analyzed {monthExpenses.length} transactions.
+            <p className="text-slate-400 text-xs mt-1.5 max-w-xl leading-relaxed">
+              Your AI Assistant has analyzed {monthExpenses.length} transactions for {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. Everything is fully synced.
             </p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
             <button
               onClick={() => onNavigateToTab('ai-assistant')}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-500/40 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-indigo-600/25 transition duration-200"
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-indigo-400 hover:text-indigo-300 text-xs font-semibold flex items-center space-x-2 transition duration-200 cursor-pointer"
             >
-              <Bot className="w-4 h-4 text-indigo-200" />
-              <span>Ask AI Assistant</span>
+              <Bot className="w-4 h-4" />
+              <span>Consult AI Coach</span>
             </button>
             <button
               onClick={onOpenAddModal}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs font-bold flex items-center space-x-1.5 shadow-lg shadow-purple-500/25 transition duration-200"
+              className="px-4 py-2.5 rounded-xl bg-white text-slate-950 text-xs font-bold flex items-center space-x-1.5 hover:bg-slate-100 transition duration-200 cursor-pointer"
             >
-              <span>+ Add Expense</span>
+              <span>+ Log Record</span>
             </button>
           </div>
         </div>
@@ -159,54 +158,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Today's Spending */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Today's Spending</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Today</span>
+            <div className="p-2 rounded-xl bg-amber-500/5 text-amber-500 border border-amber-500/10">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-white">
+          <div className="text-2xl font-bold font-outfit text-white">
             {formatCurrency(todayTotal)}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            {todayExpenses.length} transaction{todayExpenses.length !== 1 ? 's' : ''} today
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">
+            {todayExpenses.length} logged today
           </p>
         </div>
 
         {/* This Month Total */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">This Month</span>
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">This Month</span>
+            <div className="p-2 rounded-xl bg-indigo-500/5 text-indigo-400 border border-indigo-500/10">
               <Calendar className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-white">
+          <div className="text-2xl font-bold font-outfit text-white">
             {formatCurrency(monthTotal)}
           </div>
-          <div className="flex items-center space-x-2 mt-1">
-            <span className="text-xs font-medium text-slate-400">
-              {budgetPercentage}% of {formatCurrency(totalAllocatedBudget)}
+          <div className="flex items-center space-x-2 mt-1.5">
+            <span className="text-[10px] text-slate-500 font-medium">
+              {budgetPercentage}% of {formatCurrency(totalAllocatedBudget)} budget
             </span>
           </div>
         </div>
 
         {/* Remaining Budget */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Remaining Budget</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Remaining Pool</span>
+            <div className="p-2 rounded-xl bg-emerald-500/5 text-emerald-400 border border-emerald-500/10">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-400">
+          <div className="text-2xl font-bold font-outfit text-emerald-400">
             {formatCurrency(remainingBudget)}
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+          <div className="w-full bg-slate-950 rounded-full h-1 mt-2.5 overflow-hidden">
             <div 
-              className={`h-full rounded-full ${
-                budgetPercentage > 90 ? 'bg-red-500' : budgetPercentage > 75 ? 'bg-amber-500' : 'bg-emerald-500'
+              className={`h-full rounded-full transition-all duration-500 ${
+                budgetPercentage > 90 ? 'bg-red-500' : budgetPercentage > 75 ? 'bg-amber-500' : 'bg-emerald-400'
               }`} 
               style={{ width: `${budgetPercentage}%` }}
             />
@@ -214,18 +213,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Daily Average */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden group hover:border-slate-700 transition">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Daily Average</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Daily Average</span>
+            <div className="p-2 rounded-xl bg-purple-500/5 text-purple-400 border border-purple-500/10">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-white">
+          <div className="text-2xl font-bold font-outfit text-white">
             {formatCurrency(dailyAverage)}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Across {daysPassedInMonth} days in {now.toLocaleDateString('en-US', { month: 'short' })}
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">
+            Calculated across {daysPassedInMonth} days
           </p>
         </div>
 
@@ -241,15 +240,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Category Pie Chart */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-white">Category Breakdown</h3>
-              <p className="text-xs text-slate-400">Spending distribution this month</p>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Category Breakdown</h3>
+              <p className="text-[10px] text-slate-500">Monthly spend share</p>
             </div>
             <button 
               onClick={() => onNavigateToTab('analytics')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center"
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center cursor-pointer"
             >
               Details <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -263,9 +262,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     data={pieChartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={80}
-                    paddingAngle={4}
+                    innerRadius={58}
+                    outerRadius={75}
+                    paddingAngle={3}
                     dataKey="value"
                   >
                     {pieChartData.map((entry, index) => (
@@ -274,47 +273,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </Pie>
                   <Tooltip 
                     formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Spent']}
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-center text-slate-500 text-xs">No transactions recorded yet</div>
+              <div className="text-center text-slate-500 text-xs">No records logged</div>
             )}
           </div>
 
           {/* Legend Strip */}
-          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-800">
+          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-900">
             {pieChartData.slice(0, 4).map((item) => (
-              <div key={item.name} className="flex items-center space-x-2 text-xs">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-slate-300 truncate">{item.name}</span>
-                <span className="text-slate-400 font-bold ml-auto">{formatCurrency(item.value)}</span>
+              <div key={item.name} className="flex items-center space-x-2 text-[10px]">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="text-slate-400 truncate">{item.name}</span>
+                <span className="text-slate-300 font-bold ml-auto">{formatCurrency(item.value)}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Weekly Spending Bar Chart */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl lg:col-span-2 flex flex-col justify-between">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm lg:col-span-2 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-white">7-Day Spending Pattern</h3>
-              <p className="text-xs text-slate-400">Daily expenses over the last week</p>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">7-Day Spending Pattern</h3>
+              <p className="text-[10px] text-slate-500">Expenses over the past week</p>
             </div>
           </div>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={last7DaysData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="day" stroke="#64748b" tick={{ fontSize: 12 }} />
-                <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" vertical={false} />
+                <XAxis dataKey="day" stroke="#475569" tick={{ fontSize: 10 }} />
+                <YAxis stroke="#475569" tick={{ fontSize: 10 }} />
                 <Tooltip 
                   formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Spent']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                 />
-                <Bar dataKey="amount" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" fill="#4f46e5" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -326,64 +325,78 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Recent Transactions List */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl lg:col-span-2">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-white">Recent Transactions</h3>
-              <p className="text-xs text-slate-400">Latest logged expenses</p>
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Recent Transactions</h3>
+              <p className="text-[10px] text-slate-500">Latest logged records</p>
             </div>
             <button 
               onClick={() => onNavigateToTab('expenses')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center"
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center cursor-pointer"
             >
               View All ({expenses.length}) <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {expenses.slice(0, 5).map((exp) => (
               <div 
                 key={exp.id}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition duration-150 group"
+                className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950/40 border border-slate-900/50 hover:border-slate-800 transition duration-200 group"
               >
                 <div className="flex items-center space-x-3">
                   <div 
                     className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"
                     style={{ 
-                      backgroundColor: `${CATEGORY_COLORS[exp.category] || '#64748b'}20`, 
+                      backgroundColor: `${CATEGORY_COLORS[exp.category] || '#64748b'}10`, 
                       color: CATEGORY_COLORS[exp.category] || '#94a3b8' 
                     }}
                   >
-                    <Tag className="w-4 h-4" />
+                    <Tag className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition">
-                      {exp.description}
+                    <h4 className="text-xs font-bold text-white group-hover:text-indigo-400 transition-all flex items-center">
+                      <span>{exp.description}</span>
+                      {exp.receiptUrl && (
+                        <a 
+                          href={exp.receiptUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="ml-2 inline-flex items-center text-[9px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5 transition-all"
+                        >
+                          Bill ↗
+                        </a>
+                      )}
                     </h4>
-                    <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                    <div className="flex items-center space-x-2 text-[10px] text-slate-500 mt-0.5 font-medium">
                       <span>{exp.category}</span>
                       <span>•</span>
                       <span>{exp.paymentMethod}</span>
-                      <span>•</span>
-                      <span>{exp.date}</span>
+                      {exp.source === 'whatsapp' && (
+                        <>
+                          <span>•</span>
+                          <span className="text-emerald-400 font-bold">via WhatsApp</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-3">
-                  <span className="font-extrabold text-sm text-white">
+                  <span className="font-bold text-xs sm:text-sm text-white">
                     {formatCurrency(exp.amount)}
                   </span>
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 transition">
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 transition-all duration-300">
                     <button
                       onClick={() => onEditExpense(exp)}
-                      className="p-1 rounded text-slate-400 hover:text-indigo-400 hover:bg-slate-800"
+                      className="p-1 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-slate-900 transition-all cursor-pointer"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => onDeleteExpense(exp.id)}
-                      className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-slate-800"
+                      className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-slate-900 transition-all cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -395,37 +408,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* AI Assistant Quick Launcher Card */}
-        <div className="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-purple-950/60 border border-indigo-500/30 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold mb-2">
               <Bot className="w-4 h-4" />
-              <span>AI AGENT ASSISTANT</span>
+              <span>AI COACHING</span>
             </div>
-            <h3 className="text-base font-bold text-white">Need Quick Financial Advice?</h3>
-            <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
-              Ask your AI Agent anything about your monthly spending, budget limits, or if you can afford upcoming expenses.
+            <h3 className="text-sm font-bold text-white uppercase tracking-wide">Financial Insights</h3>
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+              Ask your AI Agent about monthly trends, budget balances, or purchase approvals.
             </p>
 
             <div className="mt-4 space-y-2">
               <button
                 onClick={() => onNavigateToTab('ai-assistant')}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/70 hover:border-indigo-500 text-xs text-slate-200 hover:text-white transition flex items-center justify-between"
+                className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
               >
                 <span>"How much did I spend this month?"</span>
                 <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
               </button>
               <button
                 onClick={() => onNavigateToTab('ai-assistant')}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/70 hover:border-indigo-500 text-xs text-slate-200 hover:text-white transition flex items-center justify-between"
+                className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
               >
                 <span>"Can I afford a ₹3,000 purchase?"</span>
-                <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-              <button
-                onClick={() => onNavigateToTab('ai-assistant')}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/70 hover:border-indigo-500 text-xs text-slate-200 hover:text-white transition flex items-center justify-between"
-              >
-                <span>"Give me budget saving tips"</span>
                 <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
               </button>
             </div>
@@ -433,10 +439,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => onNavigateToTab('ai-assistant')}
-            className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/30"
+            className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center space-x-2 transition shadow-md shadow-indigo-600/10 cursor-pointer"
           >
-            <span>Open AI Chat Agent</span>
-            <ChevronRight className="w-4 h-4" />
+            <span>Open AI Chat</span>
           </button>
         </div>
 

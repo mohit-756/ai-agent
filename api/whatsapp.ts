@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 
 // Initialize Supabase Client for Serverless Backend
@@ -7,7 +8,14 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Category Keywords for parsing
+// Initialize Google Gemini API
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+
+// Category list for fallback mapping
+const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
+
+// Category Keywords for parsing text
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'Food & Dining': ['swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food'],
   'Transportation': ['uber', 'ola', 'rapido', 'metro', 'auto', 'cab', 'taxi', 'fuel', 'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc'],
@@ -30,11 +38,10 @@ function autoCategorize(text: string): string {
   return 'Others';
 }
 
-function parseNaturalLanguage(text: string) {
+function parseTextExpense(text: string) {
   const trimmed = text.trim();
   let amount: number | null = null;
   
-  // Extract amount
   const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
   const amountMatch = trimmed.match(amountRegex);
   if (amountMatch) {
@@ -45,10 +52,7 @@ function parseNaturalLanguage(text: string) {
     }
   }
 
-  // Extract category
   const category = autoCategorize(trimmed);
-
-  // Extract payment method
   let paymentMethod = 'UPI';
   const lower = trimmed.toLowerCase();
   if (lower.includes('credit card') || lower.includes('cc')) {
@@ -59,7 +63,6 @@ function parseNaturalLanguage(text: string) {
     paymentMethod = 'Cash';
   }
 
-  // Extract Merchant
   let merchant = '';
   const merchants = ['Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 'Amazon', 'Flipkart', 'Myntra', 'Netflix', 'Spotify', 'Apollo', 'D-Mart', 'BESCOM', 'Airtel'];
   for (const m of merchants) {
@@ -85,6 +88,8 @@ function parseNaturalLanguage(text: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const whatsappToken = process.env.WHATSAPP_TOKEN;
+
   // 1. GET Request: Webhook Verification for Meta
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
@@ -107,50 +112,153 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const body = req.body;
 
-      // Ensure this is a WhatsApp message webhook
       if (body.object === 'whatsapp_business_account' && body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
         const messageVal = body.entry[0].changes[0].value;
         const phoneId = messageVal.metadata.phone_number_id;
         const msg = messageVal.messages[0];
         const fromNumber = msg.from; // User's WhatsApp Number
-        const msgText = msg.text?.body || '';
+        
+        let parsed = {
+          amount: null as number | null,
+          category: 'Others',
+          description: '',
+          merchant: '',
+          paymentMethod: 'UPI',
+          date: new Date().toISOString().split('T')[0]
+        };
+        let receiptUrl: string | undefined = undefined;
+        let isImage = false;
 
-        console.log(`Incoming message from ${fromNumber}: "${msgText}"`);
+        // Check if message is an image attachment (Receipt photo / screenshot)
+        if (msg.type === 'image' && msg.image && genAI && supabase) {
+          isImage = true;
+          const mediaId = msg.image.id;
 
-        // Parse Message
-        const parsed = parseNaturalLanguage(msgText);
+          console.log(`Downloading image media: ${mediaId}`);
+          
+          // Step A: Get WhatsApp Media download link
+          const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
+            headers: { Authorization: `Bearer ${whatsappToken}` }
+          });
+          const mediaUrl = mediaRes.data.url;
+
+          // Step B: Download the image binary buffer
+          const imageRes = await axios.get(mediaUrl, {
+            headers: { Authorization: `Bearer ${whatsappToken}` },
+            responseType: 'arraybuffer'
+          });
+          const buffer = Buffer.from(imageRes.data);
+
+          // Step C: Upload to Supabase Storage Bucket ('receipts')
+          const storageFilename = `${Date.now()}_receipt.jpg`;
+          const { error: uploadError } = await supabase.storage
+            .from('receipts')
+            .upload(storageFilename, buffer, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+
+          if (uploadError) {
+            console.error('Supabase upload error:', uploadError);
+          } else {
+            // Get public URL link
+            const { data: linkData } = supabase.storage
+              .from('receipts')
+              .getPublicUrl(storageFilename);
+            receiptUrl = linkData.publicUrl;
+            console.log(`Uploaded receipt image link: ${receiptUrl}`);
+          }
+
+          // Step D: Send base64 to Gemini 1.5 Flash for OCR Extraction
+          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+          const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
+1. Total amount paid (number only)
+2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
+3. Category (Must choose ONLY one of: ${CATEGORIES.join(', ')})
+4. Description (A short brief memo of the spend)
+5. Payment Method (Choose one of: UPI, Credit Card, Debit Card, Cash, Net Banking)
+
+Return ONLY a clean JSON object without markdown fences, matching exactly this format:
+{
+  "amount": 450,
+  "merchant": "Swiggy",
+  "category": "Food & Dining",
+  "description": "Lunch order",
+  "paymentMethod": "UPI"
+}`;
+
+          const geminiResult = await model.generateContent([
+            prompt,
+            {
+              inlineData: {
+                data: buffer.toString('base64'),
+                mimeType: 'image/jpeg'
+              }
+            }
+          ]);
+
+          const responseText = geminiResult.response.text().trim();
+          console.log(`Gemini raw extraction result: ${responseText}`);
+          
+          try {
+            // Remove markdown code block surrounds if present
+            const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+            const extracted = JSON.parse(cleanJson);
+            parsed = {
+              amount: parseFloat(extracted.amount) || null,
+              category: CATEGORIES.includes(extracted.category) ? extracted.category : 'Others',
+              description: extracted.description || 'Receipt Image Log',
+              merchant: extracted.merchant || '',
+              paymentMethod: extracted.paymentMethod || 'UPI',
+              date: new Date().toISOString().split('T')[0]
+            };
+          } catch (jsonErr) {
+            console.error('Failed to parse JSON response from Gemini:', jsonErr);
+          }
+        } else {
+          // Process standard text messages
+          const msgText = msg.text?.body || '';
+          console.log(`Processing text message from ${fromNumber}: "${msgText}"`);
+          parsed = parseTextExpense(msgText);
+        }
+
         let replyBody = '';
 
         if (parsed.amount) {
-          // If Supabase is connected, write the expense
           if (supabase) {
             const { error } = await supabase.from('expenses').insert([{
               amount: parsed.amount,
               category: parsed.category,
               description: parsed.description,
               merchant: parsed.merchant,
-              paymentmethod: parsed.paymentMethod, // Match all-lowercase DB column name exactly
+              paymentmethod: parsed.paymentMethod,
               date: parsed.date,
-              notes: `WhatsApp message from ${fromNumber}`,
-              source: 'whatsapp'
+              notes: isImage ? `Receipt image parsed via Gemini AI` : `WhatsApp text entry`,
+              source: 'whatsapp',
+              receipt_url: receiptUrl || null
             }]);
 
             if (error) {
               console.error('Supabase write error:', error);
               replyBody = `⚠️ Error saving expense: ${error.message}`;
             } else {
-              replyBody = `✅ *Recorded Expense!*\n\n• *Amount:* ₹${parsed.amount}\n• *Description:* ${parsed.description}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\nSynced instantly with your SpendWise App!`;
+              replyBody = `${isImage ? '📸 *Receipt Scanned Successfully!*' : '✅ *Recorded Expense!*'}\n\n` +
+                `• *Amount:* ₹${parsed.amount}\n` +
+                `• *Merchant:* ${parsed.merchant || 'N/A'}\n` +
+                `• *Category:* ${parsed.category}\n` +
+                `• *Payment:* ${parsed.paymentMethod}\n\n` +
+                `Synced instantly with your SpendWise Dashboard!`;
             }
           } else {
-            // No Database Configured yet
-            replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Description:* ${parsed.description}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
+            replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Merchant:* ${parsed.merchant || 'N/A'}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
           }
         } else {
-          replyBody = `👋 *SpendWise Financial Agent*\n\nSend a message like:\n_"Spent ₹350 on Swiggy lunch"_ or _"Uber ride ₹180 via UPI"_ to log an expense.`;
+          replyBody = isImage 
+            ? `⚠️ *Gemini OCR failed to extract a valid amount.* Please ensure the image clearly shows the total bill amount.`
+            : `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
         }
 
         // Send Reply via Meta Cloud API
-        const whatsappToken = process.env.WHATSAPP_TOKEN;
         if (whatsappToken && phoneId) {
           await axios.post(
             `https://graph.facebook.com/v25.0/${phoneId}/messages`,
@@ -168,11 +276,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             }
           );
-        } else {
-          console.warn('Meta WhatsApp Token missing. Message reply skipped.');
         }
 
-        return res.status(200).json({ success: true, parsed });
+        return res.status(200).json({ success: true, parsed, receiptUrl });
       }
 
       return res.status(200).json({ status: 'Ignored webhook payload' });

@@ -78,41 +78,41 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ expenses }) => {
       
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Visual Analytics & Reports</h1>
-        <p className="text-xs text-slate-400">Deep-dive financial breakdown by category, payment method, and merchant</p>
+        <h1 className="text-xl font-bold text-white uppercase tracking-wider">Reports & Analytics</h1>
+        <p className="text-xs text-slate-400">Deep-dive category, channel, and store spending patterns</p>
       </div>
 
       {/* Summary KPI Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Total Volume</div>
-          <div className="text-2xl font-extrabold text-white">{formatCurrency(totalSum)}</div>
-          <p className="text-xs text-slate-400 mt-1">{totalCount} total logged expenses</p>
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Volume</div>
+          <div className="text-2xl font-bold font-outfit text-white">{formatCurrency(totalSum)}</div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">{totalCount} recorded expenses</p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Average Expense Size</div>
-          <div className="text-2xl font-extrabold text-indigo-400">{formatCurrency(avgTransaction)}</div>
-          <p className="text-xs text-slate-400 mt-1">Per transaction average</p>
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Avg Transaction</div>
+          <div className="text-2xl font-bold font-outfit text-indigo-400">{formatCurrency(avgTransaction)}</div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">Mean spend per entry</p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Largest Single Spend</div>
-          <div className="text-2xl font-extrabold text-pink-400">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Single Peak Spend</div>
+          <div className="text-2xl font-bold font-outfit text-pink-400">
             {largestExpense ? formatCurrency(largestExpense.amount) : '₹0'}
           </div>
-          <p className="text-xs text-slate-400 mt-1 truncate">
+          <p className="text-[10px] text-slate-500 mt-1 font-medium truncate">
             {largestExpense ? largestExpense.description : 'N/A'}
           </p>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Top Payment Channel</div>
-          <div className="text-2xl font-extrabold text-emerald-400">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Top Method</div>
+          <div className="text-2xl font-bold font-outfit text-emerald-400">
             {paymentChartData.length > 0 ? paymentChartData[0].name : 'N/A'}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">
             {paymentChartData.length > 0 ? formatCurrency(paymentChartData[0].value) : '₹0'}
           </p>
         </div>
@@ -123,33 +123,33 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ expenses }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Category Ranking Horizontal Bar Chart */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl lg:col-span-2 flex flex-col justify-between">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm lg:col-span-2 flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white mb-1">Category Spending Comparison</h3>
-            <p className="text-xs text-slate-400 mb-4">Total amount spent per category</p>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Category Ranking</h3>
+            <p className="text-[10px] text-slate-500 mb-4">Total amount spent per category</p>
           </div>
 
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryChartData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="category" type="category" stroke="#64748b" tick={{ fontSize: 11 }} width={110} />
+              <BarChart data={categoryChartData} layout="vertical" margin={{ top: 5, right: 30, left: 30, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" horizontal={false} />
+                <XAxis type="number" stroke="#475569" tick={{ fontSize: 10 }} />
+                <YAxis dataKey="category" type="category" stroke="#475569" tick={{ fontSize: 10 }} width={100} />
                 <Tooltip 
                   formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Total Spent']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                 />
-                <Bar dataKey="amount" fill="#818cf8" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="amount" fill="#6366f1" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Payment Methods Donut Chart */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white mb-1">Payment Channel Share</h3>
-            <p className="text-xs text-slate-400 mb-4">Distribution by payment method</p>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Payment Channels</h3>
+            <p className="text-[10px] text-slate-500 mb-4">Distribution by channel type</p>
           </div>
 
           <div className="h-56 w-full relative flex items-center justify-center">
@@ -159,9 +159,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ expenses }) => {
                   data={paymentChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
+                  innerRadius={55}
                   outerRadius={75}
-                  paddingAngle={4}
+                  paddingAngle={3}
                   dataKey="value"
                 >
                   {paymentChartData.map((entry, index) => (
@@ -170,18 +170,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ expenses }) => {
                 </Pie>
                 <Tooltip 
                   formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Spent']}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="space-y-1.5 pt-3 border-t border-slate-800">
+          <div className="space-y-1.5 pt-3 border-t border-slate-950">
             {paymentChartData.map((item) => (
-              <div key={item.name} className="flex items-center justify-between text-xs">
+              <div key={item.name} className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
                 <div className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-slate-300 font-medium">{item.name}</span>
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span>{item.name}</span>
                 </div>
                 <span className="text-white font-bold">{formatCurrency(item.value)}</span>
               </div>
@@ -192,24 +192,24 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ expenses }) => {
       </div>
 
       {/* Merchant Leaderboard Card */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+      <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center space-x-2 mb-4">
-          <Award className="w-5 h-5 text-amber-400" />
+          <Award className="w-4 h-4 text-amber-500" />
           <div>
-            <h3 className="text-sm font-bold text-white">Top Merchants & Outlets</h3>
-            <p className="text-xs text-slate-400">Stores where you spend the most</p>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Top Merchant Leaderboard</h3>
+            <p className="text-[10px] text-slate-500">Outlets accounting for major spending</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
           {topMerchants.map((m, idx) => (
-            <div key={m.name} className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-center">
-              <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-300 mx-auto mb-2 flex items-center justify-center font-bold text-xs">
+            <div key={m.name} className="p-4 rounded-xl bg-slate-950/40 border border-slate-900 text-center hover:border-slate-800 transition duration-200">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 mx-auto mb-2 flex items-center justify-center font-bold text-[10px]">
                 #{idx + 1}
               </div>
               <h4 className="text-xs font-bold text-white truncate">{m.name}</h4>
-              <div className="text-xs font-extrabold text-emerald-400 mt-1">{formatCurrency(m.total)}</div>
-              <span className="text-[10px] text-slate-400">{m.count} order{m.count !== 1 ? 's' : ''}</span>
+              <div className="text-sm font-extrabold text-emerald-400 mt-1 font-outfit">{formatCurrency(m.total)}</div>
+              <span className="text-[9px] text-slate-500 font-medium">{m.count} logs</span>
             </div>
           ))}
         </div>
