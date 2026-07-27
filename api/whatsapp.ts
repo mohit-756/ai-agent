@@ -172,8 +172,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               receiptUrl = linkData.publicUrl;
             }
 
-            // Step D: Send base64 to Gemini for OCR extraction
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            // Step D: Send base64 to Gemini for OCR extraction using a robust model fallback loop
+            const modelsToTry = [
+              'gemini-3.5-flash',
+              'gemini-3.6-flash',
+              'gemini-3.5-flash-lite',
+              'gemini-2.5-flash'
+            ];
+
             const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
 1. Total amount paid (number only)
 2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
@@ -190,15 +196,33 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
   "paymentMethod": "UPI"
 }`;
 
-            const geminiResult = await model.generateContent([
-              prompt,
-              {
-                inlineData: {
-                  data: buffer.toString('base64'),
-                  mimeType: 'image/jpeg'
-                }
+            let geminiResult = null;
+            let lastModelErr = null;
+
+            for (const modelName of modelsToTry) {
+              try {
+                console.log(`Attempting Gemini OCR with model: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                geminiResult = await model.generateContent([
+                  prompt,
+                  {
+                    inlineData: {
+                      data: buffer.toString('base64'),
+                      mimeType: 'image/jpeg'
+                    }
+                  }
+                ]);
+                console.log(`Successfully generated content using model: ${modelName}`);
+                break;
+              } catch (err: any) {
+                console.warn(`Model ${modelName} failed: ${err.message}`);
+                lastModelErr = err;
               }
-            ]);
+            }
+
+            if (!geminiResult) {
+              throw new Error(`All Gemini models failed. Last error: ${lastModelErr?.message}`);
+            }
 
             const responseText = geminiResult.response.text().trim();
             console.log(`Gemini raw extraction result: ${responseText}`);
