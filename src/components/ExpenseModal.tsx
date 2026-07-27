@@ -250,6 +250,33 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
             />
           </div>
 
+          {/* Attached Receipt Preview */}
+          {initialExpense?.receiptUrl && (
+            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between animate-fade-in">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 shrink-0">
+                  <img 
+                    src={initialExpense.receiptUrl} 
+                    alt="Receipt Thumbnail" 
+                    className="w-full h-full object-cover" 
+                  />
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Attached Bill Photo</div>
+                  <div className="text-[11px] text-slate-300 font-semibold">GPay / DMart Receipt</div>
+                </div>
+              </div>
+              <a 
+                href={initialExpense.receiptUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold transition border border-emerald-500/20 cursor-pointer"
+              >
+                View Full ↗
+              </a>
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
             <button

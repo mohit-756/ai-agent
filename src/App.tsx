@@ -20,6 +20,22 @@ export function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   
+  // Theme state: neon (default) or mono (black & white minimalist)
+  const [theme, setTheme] = useState<'neon' | 'mono'>(() => {
+    return (localStorage.getItem('spendwise-theme') as 'neon' | 'mono') || 'neon';
+  });
+
+  // Sync theme to root class
+  useEffect(() => {
+    localStorage.setItem('spendwise-theme', theme);
+    const root = document.documentElement;
+    if (theme === 'mono') {
+      root.classList.add('theme-mono');
+    } else {
+      root.classList.remove('theme-mono');
+    }
+  }, [theme]);
+
   // Modal & Edit State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -100,11 +116,15 @@ export function App() {
   const insightsCount = AIFinanceService.generateSpendingInsights(expenses, budgets).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div className={`min-h-screen font-sans antialiased selection:bg-neutral-800 selection:text-white transition-all duration-300 ${
+      theme === 'mono' ? 'bg-black text-neutral-100' : 'bg-slate-950 text-slate-100'
+    }`}>
       
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-24 sm:bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-2xl bg-slate-900 border border-indigo-500/40 text-white text-xs font-bold shadow-2xl animate-bounce">
+        <div className={`fixed bottom-24 sm:bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-2xl border text-xs font-bold shadow-2xl animate-bounce ${
+          theme === 'mono' ? 'bg-neutral-900 border-white text-white' : 'bg-slate-900 border-indigo-500/40 text-white'
+        }`}>
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
@@ -118,6 +138,8 @@ export function App() {
         onResetDemoData={handleResetDemoData}
         totalExpensesCount={expenses.length}
         unreadInsightsCount={insightsCount}
+        theme={theme}
+        onToggleTheme={() => setTheme(prev => prev === 'neon' ? 'mono' : 'neon')}
       />
 
       {/* Main Container */}

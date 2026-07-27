@@ -8,7 +8,8 @@ import {
   Plus, 
   Sparkles,
   RotateCcw,
-  MessageSquare
+  MessageSquare,
+  Palette
 } from 'lucide-react';
 
 export type ActiveTab = 'dashboard' | 'expenses' | 'budgets' | 'analytics' | 'ai-assistant' | 'whatsapp';
@@ -20,6 +21,8 @@ interface NavbarProps {
   onResetDemoData: () => void;
   totalExpensesCount: number;
   unreadInsightsCount: number;
+  theme: 'neon' | 'mono';
+  onToggleTheme: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -28,7 +31,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAddModal,
   onResetDemoData,
   totalExpensesCount,
-  unreadInsightsCount
+  unreadInsightsCount,
+  theme,
+  onToggleTheme
 }) => {
   const navItems = [
     { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: LayoutDashboard },
@@ -49,8 +54,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center space-x-3 cursor-pointer group" 
             onClick={() => setActiveTab('dashboard')}
           >
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-300 group-hover:scale-105 ${
+              theme === 'mono'
+                ? 'bg-white text-black shadow-white/5'
+                : 'bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 text-white shadow-indigo-500/20'
+            }`}>
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
@@ -113,10 +122,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               <RotateCcw className="w-4 h-4" />
             </button>
 
+            {/* Theme Toggle Button */}
+            <button
+              onClick={onToggleTheme}
+              title={`Switch to ${theme === 'neon' ? 'Carbon Monochrome' : 'Neon Nebula'} Theme`}
+              className="p-2.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-900/80 transition-all cursor-pointer"
+            >
+              <Palette className="w-4 h-4 text-indigo-400" />
+            </button>
+
             {/* Add Expense Modal Trigger */}
             <button
               onClick={onOpenAddModal}
-              className="flex items-center space-x-2 px-5 py-3 rounded-2xl text-xs font-bold tracking-wide text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 shadow-lg shadow-purple-500/10 hover:shadow-purple-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className={`flex items-center space-x-2 px-5 py-3 rounded-2xl text-xs font-bold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+                theme === 'mono'
+                  ? 'bg-white text-black hover:bg-neutral-200 shadow-lg shadow-white/5'
+                  : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/10 hover:shadow-purple-500/20'
+              }`}
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               <span>Add Record</span>

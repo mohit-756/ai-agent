@@ -33,3 +33,68 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+
+/* Monochrome B&W Theme Class Overrides */
+.theme-mono {
+  --color-indigo-400: #ffffff;
+  --color-purple-400: #ffffff;
+  --color-pink-400: #ffffff;
+}
+
+.theme-mono .bg-slate-900\/20,
+.theme-mono .bg-slate-950\/40,
+.theme-mono .bg-slate-950\/50,
+.theme-mono .bg-slate-950\/60,
+.theme-mono .bg-slate-950\/80,
+.theme-mono .bg-slate-900 {
+  background-color: #0a0a0a !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+}
+
+.theme-mono .border-slate-900,
+.theme-mono .border-slate-800,
+.theme-mono .border-slate-700,
+.theme-mono .border-slate-900\/50,
+.theme-mono .border-slate-900\/80 {
+  border-color: #1a1a1a !important;
+}
+
+.theme-mono .text-indigo-400,
+.theme-mono .text-purple-400,
+.theme-mono .text-pink-400,
+.theme-mono .text-indigo-300,
+.theme-mono .text-indigo-200 {
+  color: #ffffff !important;
+}
+
+.theme-mono .bg-indigo-500\/10,
+.theme-mono .bg-purple-500\/10,
+.theme-mono .bg-indigo-500\/20,
+.theme-mono .bg-purple-500\/5,
+.theme-mono .bg-indigo-500\/5,
+.theme-mono .bg-emerald-500\/5,
+.theme-mono .bg-emerald-500\/10 {
+  background-color: #1e1e1e !important;
+  color: #ffffff !important;
+  border-color: #2e2e2e !important;
+}
+
+.theme-mono .from-indigo-500,
+.theme-mono .via-purple-500,
+.theme-mono .to-pink-500,
+.theme-mono .from-indigo-600,
+.theme-mono .to-pink-600,
+.theme-mono .bg-gradient-to-r,
+.theme-mono .bg-gradient-to-tr {
+  background-image: none !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.theme-mono .shadow-lg,
+.theme-mono .shadow-md,
+.theme-mono .shadow-xl {
+  box-shadow: none !important;
+}
+
