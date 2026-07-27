@@ -13,7 +13,7 @@ import { ExpenseService } from './services/expenseService';
 import { BudgetService } from './services/budgetService';
 import { AIFinanceService } from './services/aiFinanceService';
 import type { Expense, Budget } from './types/expense';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, X } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -23,6 +23,9 @@ export function App() {
   // Modal & Edit State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+
+  // Lightbox Preview for Receipt Image
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -101,7 +104,7 @@ export function App() {
       
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-2xl bg-slate-900 border border-indigo-500/40 text-white text-xs font-bold shadow-2xl animate-bounce">
+        <div className="fixed bottom-24 sm:bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-2xl bg-slate-900 border border-indigo-500/40 text-white text-xs font-bold shadow-2xl animate-bounce">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{toastMessage}</span>
         </div>
@@ -118,9 +121,9 @@ export function App() {
       />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-24 sm:pb-6 space-y-6">
         
-        {/* Natural Language Quick-Add Bar (Always visible at top of Dashboard & Expenses tabs) */}
+        {/* Natural Language Quick-Add Bar */}
         {(activeTab === 'dashboard' || activeTab === 'expenses') && (
           <QuickAddBar onAddExpense={handleAddExpense} />
         )}
@@ -134,6 +137,7 @@ export function App() {
             onEditExpense={handleOpenEditModal}
             onDeleteExpense={handleDeleteExpense}
             onNavigateToTab={(tab) => setActiveTab(tab)}
+            onViewReceipt={(url) => setPreviewImageUrl(url)}
           />
         )}
 
@@ -143,6 +147,7 @@ export function App() {
             onOpenAddModal={handleOpenAddModal}
             onEditExpense={handleOpenEditModal}
             onDeleteExpense={handleDeleteExpense}
+            onViewReceipt={(url) => setPreviewImageUrl(url)}
           />
         )}
 
@@ -180,6 +185,34 @@ export function App() {
         onUpdate={handleUpdateExpense}
         initialExpense={editingExpense}
       />
+
+      {/* Lightbox Modal (For viewing uploaded bills/receipts cleanly inside the app) */}
+      {previewImageUrl && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fade-in"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div 
+            className="relative max-w-xl w-full bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden p-3 shadow-2xl animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-xl bg-slate-950/80 hover:bg-slate-950 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-900 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img 
+              src={previewImageUrl} 
+              alt="Uploaded Invoice Receipt" 
+              className="w-full h-auto max-h-[75vh] object-contain rounded-2xl mx-auto"
+            />
+            <div className="mt-3 text-center text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              Scan Receipt URL Link: <a href={previewImageUrl} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline ml-1">Open in new tab ↗</a>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

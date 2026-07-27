@@ -40,13 +40,25 @@ function parseTextExpense(text: string) {
   const trimmed = text.trim();
   let amount: number | null = null;
   
-  const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
-  const amountMatch = trimmed.match(amountRegex);
-  if (amountMatch) {
-    const rawNum = (amountMatch[1] || amountMatch[2]).replace(/,/g, '');
+  // 1. Search for numbers with explicit currency symbols (₹, Rs, INR) first
+  const currencyRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)/i;
+  const currencyMatch = trimmed.match(currencyRegex);
+  if (currencyMatch) {
+    const rawNum = currencyMatch[1].replace(/,/g, '');
     const parsed = parseFloat(rawNum);
     if (!isNaN(parsed) && parsed > 0) {
       amount = parsed;
+    }
+  } else {
+    // 2. Fallback to raw numbers with word boundaries
+    const rawRegex = /\b([\d,]+(?:\.\d+)?)\b/;
+    const rawMatch = trimmed.match(rawRegex);
+    if (rawMatch) {
+      const rawNum = rawMatch[1].replace(/,/g, '');
+      const parsed = parseFloat(rawNum);
+      if (!isNaN(parsed) && parsed > 0) {
+        amount = parsed;
+      }
     }
   }
 

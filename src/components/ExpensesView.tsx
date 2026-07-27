@@ -15,6 +15,7 @@ interface ExpensesViewProps {
   onOpenAddModal: () => void;
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
+  onViewReceipt?: (url: string) => void;
 }
 
 const CATEGORIES: (Category | 'All')[] = [
@@ -50,7 +51,8 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
   expenses,
   onOpenAddModal,
   onEditExpense,
-  onDeleteExpense
+  onDeleteExpense,
+  onViewReceipt
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Category | 'All'>('All');
@@ -226,14 +228,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                       <div className="font-bold text-white text-xs flex items-center">
                         <span>{exp.description}</span>
                         {exp.receiptUrl && (
-                          <a 
-                            href={exp.receiptUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="ml-2 inline-flex items-center text-[9px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5 transition-all"
+                          <button 
+                            type="button"
+                            onClick={() => onViewReceipt && onViewReceipt(exp.receiptUrl!)}
+                            className="ml-2 inline-flex items-center text-[9px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5 transition-all cursor-pointer"
                           >
                             Bill ↗
-                          </a>
+                          </button>
                         )}
                       </div>
                       {exp.merchant && <div className="text-[10px] text-slate-500 font-medium">{exp.merchant}</div>}

@@ -36,6 +36,7 @@ interface DashboardViewProps {
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
   onNavigateToTab: (tab: 'expenses' | 'budgets' | 'analytics' | 'ai-assistant') => void;
+  onViewReceipt?: (url: string) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -57,7 +58,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenAddModal,
   onEditExpense,
   onDeleteExpense,
-  onNavigateToTab
+  onNavigateToTab,
+  onViewReceipt
 }) => {
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -359,14 +361,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <h4 className="text-xs font-bold text-white group-hover:text-indigo-400 transition-all flex items-center">
                       <span>{exp.description}</span>
                       {exp.receiptUrl && (
-                        <a 
-                          href={exp.receiptUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="ml-2 inline-flex items-center text-[9px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5 transition-all"
+                        <button 
+                          type="button"
+                          onClick={() => onViewReceipt && onViewReceipt(exp.receiptUrl!)}
+                          className="ml-2 inline-flex items-center text-[9px] text-emerald-400 hover:text-emerald-300 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5 transition-all cursor-pointer"
                         >
                           Bill ↗
-                        </a>
+                        </button>
                       )}
                     </h4>
                     <div className="flex items-center space-x-2 text-[10px] text-slate-500 mt-0.5 font-medium">
