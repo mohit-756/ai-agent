@@ -12,10 +12,8 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 const geminiApiKey = process.env.GEMINI_API_KEY || '';
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
-// Category list for fallback mapping
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
-// Category Keywords for parsing text
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   'Food & Dining': ['swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food'],
   'Transportation': ['uber', 'ola', 'rapido', 'metro', 'auto', 'cab', 'taxi', 'fuel', 'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc'],
@@ -109,14 +107,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // 2. POST Request: Handle Incoming Message from WhatsApp
   if (req.method === 'POST') {
+    let fromNumber = '';
+    let phoneId = '';
+    
     try {
       const body = req.body;
 
       if (body.object === 'whatsapp_business_account' && body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
         const messageVal = body.entry[0].changes[0].value;
-        const phoneId = messageVal.metadata.phone_number_id;
+        phoneId = messageVal.metadata.phone_number_id;
         const msg = messageVal.messages[0];
-        const fromNumber = msg.from; // User's WhatsApp Number
+        fromNumber = msg.from; // User's WhatsApp Number
         
         let parsed = {
           amount: null as number | null,
@@ -129,49 +130,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let receiptUrl: string | undefined = undefined;
         let isImage = false;
 
-        // Check if message is an image attachment (Receipt photo / screenshot)
-        if (msg.type === 'image' && msg.image && genAI && supabase) {
+        // Process image messages
+        if (msg.type === 'image' && msg.image) {
           isImage = true;
           const mediaId = msg.image.id;
 
-          console.log(`Downloading image media: ${mediaId}`);
-          
-          // Step A: Get WhatsApp Media download link
-          const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
-            headers: { Authorization: `Bearer ${whatsappToken}` }
-          });
-          const mediaUrl = mediaRes.data.url;
+          try {
+            if (!genAI) throw new Error('GEMINI_API_KEY environment variable is not set on Vercel.');
+            if (!supabase) throw new Error('Supabase client is not initialized. Please verify SUPABASE_URL and SUPABASE_KEY.');
 
-          // Step B: Download the image binary buffer
-          const imageRes = await axios.get(mediaUrl, {
-            headers: { Authorization: `Bearer ${whatsappToken}` },
-            responseType: 'arraybuffer'
-          });
-          const buffer = Buffer.from(imageRes.data);
-
-          // Step C: Upload to Supabase Storage Bucket ('receipts')
-          const storageFilename = `${Date.now()}_receipt.jpg`;
-          const { error: uploadError } = await supabase.storage
-            .from('receipts')
-            .upload(storageFilename, buffer, {
-              contentType: 'image/jpeg',
-              upsert: true
+            console.log(`Downloading image media: ${mediaId}`);
+            
+            // Step A: Get WhatsApp Media download link
+            const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
+              headers: { Authorization: `Bearer ${whatsappToken}` }
             });
+            const mediaUrl = mediaRes.data.url;
 
-          if (uploadError) {
-            console.error('Supabase upload error:', uploadError);
-          } else {
-            // Get public URL link
-            const { data: linkData } = supabase.storage
+            // Step B: Download the image binary buffer
+            const imageRes = await axios.get(mediaUrl, {
+              headers: { Authorization: `Bearer ${whatsappToken}` },
+              responseType: 'arraybuffer'
+            });
+            const buffer = Buffer.from(imageRes.data);
+
+            // Step C: Upload to Supabase Storage Bucket ('receipts')
+            const storageFilename = `${Date.now()}_receipt.jpg`;
+            const { error: uploadError } = await supabase.storage
               .from('receipts')
-              .getPublicUrl(storageFilename);
-            receiptUrl = linkData.publicUrl;
-            console.log(`Uploaded receipt image link: ${receiptUrl}`);
-          }
+              .upload(storageFilename, buffer, {
+                contentType: 'image/jpeg',
+                upsert: true
+              });
 
-          // Step D: Send base64 to Gemini 1.5 Flash for OCR Extraction
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-          const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
+            if (uploadError) {
+              console.warn('Supabase storage upload failed:', uploadError.message);
+            } else {
+              const { data: linkData } = supabase.storage
+                .from('receipts')
+                .getPublicUrl(storageFilename);
+              receiptUrl = linkData.publicUrl;
+            }
+
+            // Step D: Send base64 to Gemini for OCR extraction
+            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+            const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
 1. Total amount paid (number only)
 2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
 3. Category (Must choose ONLY one of: ${CATEGORIES.join(', ')})
@@ -187,20 +190,19 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
   "paymentMethod": "UPI"
 }`;
 
-          const geminiResult = await model.generateContent([
-            prompt,
-            {
-              inlineData: {
-                data: buffer.toString('base64'),
-                mimeType: 'image/jpeg'
+            const geminiResult = await model.generateContent([
+              prompt,
+              {
+                inlineData: {
+                  data: buffer.toString('base64'),
+                  mimeType: 'image/jpeg'
+                }
               }
-            }
-          ]);
+            ]);
 
-          const responseText = geminiResult.response.text().trim();
-          console.log(`Gemini raw extraction result: ${responseText}`);
-          
-          try {
+            const responseText = geminiResult.response.text().trim();
+            console.log(`Gemini raw extraction result: ${responseText}`);
+            
             // Remove markdown code block surrounds if present
             const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
             const extracted = JSON.parse(cleanJson);
@@ -212,13 +214,33 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
               paymentMethod: extracted.paymentMethod || 'UPI',
               date: new Date().toISOString().split('T')[0]
             };
-          } catch (jsonErr) {
-            console.error('Failed to parse JSON response from Gemini:', jsonErr);
+
+          } catch (ocrErr: any) {
+            console.error('OCR Processing Error:', ocrErr);
+            // Send the error message directly back to the user so they can diagnose it!
+            if (whatsappToken && phoneId) {
+              await axios.post(
+                `https://graph.facebook.com/v25.0/${phoneId}/messages`,
+                {
+                  messaging_product: 'whatsapp',
+                  recipient_type: 'individual',
+                  to: fromNumber,
+                  type: 'text',
+                  text: { body: `⚠️ *Image Parse Error:* ${ocrErr.message}\n\nMake sure your Gemini API key is generated from Google AI Studio, and your Supabase 'receipts' storage bucket exists.` }
+                },
+                {
+                  headers: {
+                    Authorization: `Bearer ${whatsappToken}`,
+                    'Content-Type': 'application/json'
+                  }
+                }
+              );
+            }
+            return res.status(200).json({ error: ocrErr.message });
           }
         } else {
           // Process standard text messages
           const msgText = msg.text?.body || '';
-          console.log(`Processing text message from ${fromNumber}: "${msgText}"`);
           parsed = parseTextExpense(msgText);
         }
 
@@ -252,14 +274,12 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
           } else {
             replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Merchant:* ${parsed.merchant || 'N/A'}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
           }
-        } else {
-          replyBody = isImage 
-            ? `⚠️ *Gemini OCR failed to extract a valid amount.* Please ensure the image clearly shows the total bill amount.`
-            : `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
+        } else if (!isImage) {
+          replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
         }
 
-        // Send Reply via Meta Cloud API
-        if (whatsappToken && phoneId) {
+        // Send Reply via Meta Cloud API for successful text parses or successful image parses
+        if (replyBody && whatsappToken && phoneId) {
           await axios.post(
             `https://graph.facebook.com/v25.0/${phoneId}/messages`,
             {
