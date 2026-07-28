@@ -100,11 +100,91 @@ function parseTextExpense(text: string) {
 function parseTextPeerRecord(text: string) {
   const lower = text.toLowerCase();
   
-  // Check if there are peer keywords: lent, lend, borrow, borrowed, owe, owes, took, gave
-  const peerKeywords = ['lent', 'lend', 'borrowed', 'borrow', 'took from', 'gave to', 'split with', 'owes me', 'i owe'];
-  const hasPeerKeyword = peerKeywords.some(kw => lower.includes(kw));
+  // Check if text has structured key-value template format (e.g. contains colons and split pipes or newlines)
+  const isStructured = lower.includes(':') && (lower.includes('|') || lower.includes('\n'));
+  if (isStructured) {
+    const segments = text.split(/[|\n]+/);
+    let parsedAmount = 0;
+    let parsedType: 'lent' | 'borrowed' = 'lent';
+    let parsedName = '';
+    let parsedDesc = '';
+    let parsedDate = '';
+    let parsedDueDate = '';
+    let isPeer = false;
+
+    for (const seg of segments) {
+      const parts = seg.split(':');
+      if (parts.length < 2) continue;
+      const key = parts[0].trim().toLowerCase();
+      const val = parts.slice(1).join(':').trim();
+
+      if (key.includes('lent') || key.includes('lend') || key.includes('given')) {
+        parsedType = 'lent';
+        parsedAmount = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
+        isPeer = true;
+      } else if (key.includes('borrowed') || key.includes('borrow') || key.includes('owe') || key.includes('taken')) {
+        parsedType = 'borrowed';
+        parsedAmount = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
+        isPeer = true;
+      } else if (key === 'amount') {
+        parsedAmount = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
+      } else if (key === 'name' || key === 'person' || key === 'who' || key === 'peer') {
+        parsedName = val;
+        isPeer = true;
+      } else if (key === 'desc' || key === 'description' || key === 'for') {
+        parsedDesc = val;
+      } else if (key === 'date' || key === 'when') {
+        parsedDate = val;
+      } else if (key === 'due' || key === 'remind') {
+        parsedDueDate = val;
+      }
+    }
+
+    if (isPeer && parsedAmount > 0) {
+      let recDate = new Date().toISOString().split('T')[0];
+      if (parsedDate.toLowerCase().includes('yesterday')) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        recDate = yesterday.toISOString().split('T')[0];
+      } else {
+        const m = parsedDate.match(/\d{4}-\d{2}-\d{2}/);
+        if (m) recDate = m[0];
+      }
+
+      let dueD: string | undefined = undefined;
+      if (parsedDueDate.toLowerCase().includes('tomorrow') || parsedDueDate.toLowerCase().includes('tommorow')) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        dueD = tomorrow.toISOString().split('T')[0];
+      } else if (parsedDueDate.toLowerCase().includes('next week')) {
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        dueD = nextWeek.toISOString().split('T')[0];
+      } else {
+        const m = parsedDueDate.match(/\d{4}-\d{2}-\d{2}/);
+        if (m) dueD = m[0];
+      }
+
+      return {
+        isPeerRecord: true,
+        type: parsedType,
+        peerName: parsedName || 'Friend',
+        amount: parsedAmount,
+        description: parsedDesc || `${parsedType === 'lent' ? 'Lent' : 'Borrowed'} split`,
+        date: recDate,
+        dueDate: dueD
+      };
+    }
+  }
+
+  // Check if message matches peer transaction or reminder patterns
+  const isLent = /\blent\b|\blend\b|\bgave\b.*\bto\b|\bgiven\b.*\bto\b|\bsplit\b.*\bwith\b|\bowes\b.*\bme\b/.test(lower);
+  const isBorrowed = /\bborrowed\b|\bborrow\b|\btook\b.*\bfrom\b|\breceived\b.*\bfrom\b|\bi\b.*\bowe\b/.test(lower);
+  const isReminder = /\bremind\b.*\b(take|pay|get|give|return|collect|ask)\b/.test(lower);
   
-  if (!hasPeerKeyword) {
+  const isPeerRecord = isLent || isBorrowed || isReminder;
+  
+  if (!isPeerRecord) {
     return { isPeerRecord: false };
   }
   
@@ -126,16 +206,21 @@ function parseTextPeerRecord(text: string) {
   
   // Determine type: lent or borrowed
   let type: 'lent' | 'borrowed' = 'lent';
-  if (lower.includes('borrowed') || lower.includes('took from') || lower.includes('i owe')) {
+  if (isBorrowed) {
     type = 'borrowed';
+  } else if (isReminder && (lower.includes('pay') || lower.includes('give') || lower.includes('return to'))) {
+    type = 'borrowed';
+  } else if (isReminder && (lower.includes('take') || lower.includes('get') || lower.includes('collect') || lower.includes('ask'))) {
+    type = 'lent';
   }
   
   // Try to extract peer name and description
   let peerName = 'Friend';
   let description = 'Peer Split';
   
-  const toRegex = /(?:lent|gave\s+to|split\s+with|to)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
-  const fromRegex = /(?:borrowed|took\s+from|from)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
+  // Patterns for matching names
+  const toRegex = /(?:lent|gave|given|split\s+with|to)\s+(?:money\s+to\s+|to\s+)?([a-zA-Z]+)(?:\s+|$|\d)/i;
+  const fromRegex = /(?:borrowed|took|received|from)\s+(?:money\s+from\s+|from\s+)?([a-zA-Z]+)(?:\s+|$|\d)/i;
   
   let nameMatch = null;
   if (type === 'lent') {
@@ -147,10 +232,14 @@ function parseTextPeerRecord(text: string) {
   if (nameMatch && nameMatch[1]) {
     const candidate = nameMatch[1].trim();
     const lowerCandidate = candidate.toLowerCase();
-    if (candidate.length > 0 && !/\d/.test(candidate) && lowerCandidate !== 'yesterday' && lowerCandidate !== 'today') {
+    const stopWords = ['money', 'cash', 'yesterday', 'today', 'tomorrow', 'tommorow', 'due', 'remind', 'him', 'her', 'them', 'me', 'to', 'for', 'from'];
+    if (candidate.length > 0 && !/\d/.test(candidate) && !stopWords.includes(lowerCandidate)) {
       peerName = candidate;
     }
-  } else {
+  }
+  
+  // If still Friend, search uppercase word or keyword bounds
+  if (peerName === 'Friend') {
     const words = text.split(/\s+/);
     const nameKeywords = ['to', 'from', 'with'];
     for (let i = 0; i < words.length - 1; i++) {
@@ -164,13 +253,61 @@ function parseTextPeerRecord(text: string) {
     }
   }
   
-  // Parse description: anything after "for"
-  const forRegex = /\bfor\s+([a-zA-Z0-9\s]+)$/i;
+  // Capitalize peerName first letter
+  if (peerName && peerName !== 'Friend') {
+    peerName = peerName.charAt(0).toUpperCase() + peerName.slice(1);
+  }
+  
+  // Parse Record Date (Yesterday, YYYY-MM-DD)
+  let recordDate = new Date().toISOString().split('T')[0];
+  if (lower.includes('yesterday')) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    recordDate = yesterday.toISOString().split('T')[0];
+  } else {
+    const dateMatch = lower.match(/\bon\s+(\d{4}-\d{2}-\d{2})\b/);
+    if (dateMatch) {
+      recordDate = dateMatch[1];
+    }
+  }
+
+  // Parse Due Date / Reminder (due tomorrow, due next week, due YYYY-MM-DD, remind tomorrow/tommorow)
+  let dueDateStr: string | undefined = undefined;
+  if (lower.includes('tomorrow') || lower.includes('tommorow') || lower.includes('remind tomorrow') || lower.includes('remind tommorow')) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    dueDateStr = tomorrow.toISOString().split('T')[0];
+  } else if (lower.includes('next week')) {
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    dueDateStr = nextWeek.toISOString().split('T')[0];
+  } else {
+    const dueMatch = lower.match(/\bdue\s+(\d{4}-\d{2}-\d{2})\b/);
+    if (dueMatch) {
+      dueDateStr = dueMatch[1];
+    }
+  }
+
+  // Parse description: anything after "for" (exclude date/due clauses)
+  const forRegex = /\bfor\s+([a-zA-Z0-9\s]+?)(?:\s+on|\s+due|$)/i;
   const forMatch = text.match(forRegex);
   if (forMatch && forMatch[1]) {
     description = forMatch[1].trim();
   } else {
-    description = text.replace(amountRegex, '').replace(/\b(?:lent|borrowed|to|from|for|split|with)\b/gi, '').replace(/\s+/g, ' ').trim();
+    // Clean up all helper tags
+    description = text.replace(amountRegex, '')
+      .replace(/\b(?:lent|borrowed|to|from|for|split|with|on|due|yesterday|tomorrow|tommorow|remind|me|take|give|money|cash|him|her|them)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Remove name if included
+    if (peerName && peerName !== 'Friend') {
+      const nameEscaped = peerName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      description = description.replace(new RegExp('\\b' + nameEscaped + '\\b', 'gi'), '');
+    }
+    
+    description = description.replace(/\s+/g, ' ').trim();
+    
     if (description.length > 25) {
       description = description.slice(0, 25) + '...';
     }
@@ -185,7 +322,9 @@ function parseTextPeerRecord(text: string) {
     type,
     peerName,
     amount,
-    description: description || (type === 'lent' ? `Lent to ${peerName}` : `Borrowed from ${peerName}`)
+    description: description || (type === 'lent' ? `Lent to ${peerName}` : `Borrowed from ${peerName}`),
+    date: recordDate,
+    dueDate: dueDateStr
   };
 }
 
