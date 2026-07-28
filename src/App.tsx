@@ -6,9 +6,9 @@ import { ExpenseModal } from './components/ExpenseModal';
 import { DashboardView } from './components/DashboardView';
 import { ExpensesView } from './components/ExpensesView';
 import { BudgetsView } from './components/BudgetsView';
-import { AnalyticsView } from './components/AnalyticsView';
 import { AIAssistantView } from './components/AIAssistantView';
-import { WhatsAppHubView } from './components/WhatsAppHubView';
+import { PeerBalancesView } from './components/PeerBalancesView';
+import { PeerService } from './services/peerService';
 import { ExpenseService } from './services/expenseService';
 import { BudgetService } from './services/budgetService';
 import { AIFinanceService } from './services/aiFinanceService';
@@ -19,6 +19,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [pendingPeersCount, setPendingPeersCount] = useState<number>(0);
   
   // Theme state: neon (default) or mono (black & white minimalist)
   const [theme, setTheme] = useState<'neon' | 'mono'>(() => {
@@ -52,12 +53,19 @@ export function App() {
     const loadedBudgets = BudgetService.getBudgets();
     setExpenses(loadedExpenses);
     setBudgets(loadedBudgets);
+    
+    // Load peer ledger count
+    setPendingPeersCount(PeerService.getPeerRecords().filter(r => r.status === 'pending').length);
 
     // Fetch from Supabase cloud database in background
     ExpenseService.syncFromCloud().then(cloudExpenses => {
       setExpenses(cloudExpenses);
     });
   }, []);
+
+  const handleUpdatePeerMetrics = () => {
+    setPendingPeersCount(PeerService.getPeerRecords().filter(r => r.status === 'pending').length);
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -86,9 +94,11 @@ export function App() {
   };
 
   const handleResetDemoData = () => {
-    if (window.confirm('Reset all expense data to original demo dataset?')) {
+    if (window.confirm('Reset all expense and peer data to original demo dataset?')) {
       const reset = ExpenseService.resetDemoData();
       setExpenses(reset);
+      PeerService.resetDemoData();
+      handleUpdatePeerMetrics();
       showToast('Reset to demo dataset');
     }
   };
@@ -138,6 +148,7 @@ export function App() {
         onResetDemoData={handleResetDemoData}
         totalExpensesCount={expenses.length}
         unreadInsightsCount={insightsCount}
+        pendingPeersCount={pendingPeersCount}
         theme={theme}
         onToggleTheme={() => setTheme(prev => prev === 'neon' ? 'mono' : 'neon')}
       />
@@ -173,6 +184,13 @@ export function App() {
           />
         )}
 
+        {activeTab === 'peer-ledger' && (
+          <PeerBalancesView
+            theme={theme}
+            onUpdateMetrics={handleUpdatePeerMetrics}
+          />
+        )}
+
         {activeTab === 'budgets' && (
           <BudgetsView
             expenses={expenses}
@@ -180,19 +198,10 @@ export function App() {
           />
         )}
 
-        {activeTab === 'analytics' && (
-          <AnalyticsView expenses={expenses} />
-        )}
-
         {activeTab === 'ai-assistant' && (
           <AIAssistantView
             expenses={expenses}
             budgets={budgets}
-          />
-        )}
-
-        {activeTab === 'whatsapp' && (
-          <WhatsAppHubView
             onExpenseAddedByWhatsApp={handleExpenseAddedByWhatsApp}
           />
         )}

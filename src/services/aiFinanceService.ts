@@ -1,6 +1,7 @@
 import type { Expense, Budget, Category, PaymentMethod, AIInsight, ChatMessage, NLPParseResult } from '../types/expense';
 import { autoCategorize, formatCurrency } from './expenseService';
 import { BudgetService } from './budgetService';
+import { PeerService } from './peerService';
 
 export class AIFinanceService {
 
@@ -295,6 +296,89 @@ export class AIFinanceService {
             { label: 'Spent Amount', value: formatCurrency(highest.spent) },
             { label: 'Budget Usage', value: `${highest.percentage}%` }
           ]
+        }
+      };
+    }
+
+    // Peer balances check
+    if (q.includes('who owes me') || q.includes('owe me') || q.includes('lent') || q.includes('receivables') || q.includes('debts')) {
+      const records = PeerService.getPeerRecords().filter(r => r.type === 'lent' && r.status === 'pending');
+      const totalOwed = PeerService.getOwedToMe();
+
+      if (records.length === 0) {
+        return {
+          id: `msg-${Date.now()}`,
+          sender: 'assistant',
+          text: `🎉 **Good news!** No one owes you any money at the moment. Your peer lending ledger is completely clear.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      }
+
+      // Group by peer
+      const peerTotals: Record<string, number> = {};
+      records.forEach(r => {
+        peerTotals[r.name] = (peerTotals[r.name] || 0) + r.amount;
+      });
+
+      const items = Object.entries(peerTotals).map(([name, val]) => ({
+        label: name,
+        value: formatCurrency(val)
+      }));
+
+      const listText = Object.entries(peerTotals)
+        .map(([name, val]) => `• **${name}** owes you **${formatCurrency(val)}**`)
+        .join('\n');
+
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'assistant',
+        text: `Here is who owes you money (Total: **${formatCurrency(totalOwed)}**):\n\n${listText}\n\nYou can manage reminders or mark them settled in the **Peer Ledger** tab.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cardData: {
+          type: 'metric',
+          title: 'People Who Owe You',
+          items
+        }
+      };
+    }
+
+    if (q.includes('i owe') || q.includes('payables') || q.includes('who do i owe') || q.includes('borrowed')) {
+      const records = PeerService.getPeerRecords().filter(r => r.type === 'borrowed' && r.status === 'pending');
+      const totalIOwe = PeerService.getIOwe();
+
+      if (records.length === 0) {
+        return {
+          id: `msg-${Date.now()}`,
+          sender: 'assistant',
+          text: `✅ **All clear!** You don't owe money to anyone right now.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      }
+
+      // Group by peer
+      const peerTotals: Record<string, number> = {};
+      records.forEach(r => {
+        peerTotals[r.name] = (peerTotals[r.name] || 0) + r.amount;
+      });
+
+      const items = Object.entries(peerTotals).map(([name, val]) => ({
+        label: `Owed to ${name}`,
+        value: formatCurrency(val)
+      }));
+
+      const listText = Object.entries(peerTotals)
+        .map(([name, val]) => `• You owe **${name}** **${formatCurrency(val)}**`)
+        .join('\n');
+
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'assistant',
+        text: `Here is who you owe money to (Total: **${formatCurrency(totalIOwe)}**):\n\n${listText}\n\nYou can log paybacks once settled.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cardData: {
+          type: 'metric',
+          title: 'My Outstanding Debts',
+          items
         }
       };
     }

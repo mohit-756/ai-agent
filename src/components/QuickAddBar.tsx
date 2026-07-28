@@ -40,39 +40,36 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
   };
 
   return (
-    <div className="bg-slate-900/40 border border-slate-900 rounded-3xl p-5 shadow-sm backdrop-blur-md relative overflow-hidden group">
+    <div className="bg-slate-900/10 border border-slate-900 rounded-2xl p-4 shadow-sm relative overflow-hidden group">
       
-      {/* Background Subtle Gradient Glow */}
-      <div className="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/5 rounded-full blur-3xl transition-all group-hover:bg-indigo-500/10 pointer-events-none" />
-
       {/* Header Label */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3.5 gap-2">
         <div className="flex items-center space-x-2">
-          <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/10">
-            <Sparkles className="w-4 h-4 animate-pulse" />
+          <div className="p-1.5 rounded-xl bg-slate-950 text-slate-450 border border-slate-900">
+            <Sparkles className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
               AI Natural Language Quick-Add
             </h3>
-            <p className="text-[10px] text-slate-400">Type naturally to instantly log and categorize transactions</p>
+            <p className="text-[10px] text-slate-500">Type naturally to instantly log and categorize transactions</p>
           </div>
         </div>
 
         {/* Quick Suggestion Chips */}
         <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-          <span className="text-slate-500 font-medium mr-1">Suggestions:</span>
+          <span className="text-slate-550 font-medium mr-1">Suggestions:</span>
           <button
             type="button"
             onClick={() => handlePresetClick('Spent ₹250 on Swiggy lunch')}
-            className="px-2.5 py-1 rounded-lg bg-slate-950/60 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-900 transition-all cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-900 transition-all cursor-pointer"
           >
             "Swiggy lunch ₹250"
           </button>
           <button
             type="button"
             onClick={() => handlePresetClick('Uber auto ₹180')}
-            className="px-2.5 py-1 rounded-lg bg-slate-950/60 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-900 transition-all cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-900 transition-all cursor-pointer"
           >
             "Uber auto ₹180"
           </button>
@@ -86,17 +83,17 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="e.g., Spent ₹350 on Zomato dinner yesterday via UPI..."
-          className="w-full pl-4 pr-32 py-4 rounded-2xl bg-slate-950/80 border border-slate-900 text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500/40 focus:border-indigo-500/40 shadow-inner transition-all"
+          className="w-full pl-4 pr-32 py-3 rounded-xl bg-slate-950 border border-slate-900 text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none focus:border-slate-800 transition-all"
         />
 
         <button
           type="submit"
           disabled={!parsedResult.amount || parsedResult.amount <= 0}
-          className={`absolute right-2 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all duration-300 ${
+          className={`absolute right-2 px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all duration-300 ${
             isSuccess
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/10'
+              ? 'bg-emerald-600 text-white shadow-sm'
               : parsedResult.amount && parsedResult.amount > 0
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 cursor-pointer hover:scale-[1.01]'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'
               : 'bg-slate-900 text-slate-600 cursor-not-allowed'
           }`}
         >

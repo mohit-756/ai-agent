@@ -21,32 +21,32 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ insights, onSele
     switch (type) {
       case 'warning':
         return {
-          bg: 'bg-amber-500/10 border-amber-500/30',
+          bg: 'bg-slate-900/50 border-slate-800',
           icon: AlertTriangle,
           iconColor: 'text-amber-400',
-          badge: 'bg-amber-500/20 text-amber-300'
+          badge: 'bg-slate-950 text-amber-400 border border-slate-800'
         };
       case 'positive':
         return {
-          bg: 'bg-emerald-500/10 border-emerald-500/30',
+          bg: 'bg-slate-900/50 border-slate-800',
           icon: CheckCircle2,
           iconColor: 'text-emerald-400',
-          badge: 'bg-emerald-500/20 text-emerald-300'
+          badge: 'bg-slate-950 text-emerald-400 border border-slate-800'
         };
       case 'tip':
         return {
-          bg: 'bg-purple-500/10 border-purple-500/30',
+          bg: 'bg-slate-900/50 border-slate-800',
           icon: Lightbulb,
-          iconColor: 'text-purple-400',
-          badge: 'bg-purple-500/20 text-purple-300'
+          iconColor: 'text-indigo-400',
+          badge: 'bg-slate-950 text-indigo-400 border border-slate-800'
         };
       case 'info':
       default:
         return {
-          bg: 'bg-indigo-500/10 border-indigo-500/30',
+          bg: 'bg-slate-900/50 border-slate-800',
           icon: Info,
-          iconColor: 'text-indigo-400',
-          badge: 'bg-indigo-500/20 text-indigo-300'
+          iconColor: 'text-slate-400',
+          badge: 'bg-slate-950 text-slate-400 border border-slate-800'
         };
     }
   };

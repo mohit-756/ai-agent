@@ -1,15 +1,14 @@
-import React from 'react';
 import { 
   TrendingUp, 
   Wallet, 
   Calendar, 
   Clock, 
   Bot, 
-  ChevronRight,
-  Sparkles,
-  Tag,
-  Trash2,
-  Edit2
+  ChevronRight, 
+  Tag, 
+  Trash2, 
+  Edit2, 
+  Users 
 } from 'lucide-react';
 import { 
   PieChart, 
@@ -28,6 +27,7 @@ import { formatCurrency } from '../services/expenseService';
 import { BudgetService } from '../services/budgetService';
 import { AIInsightsCard } from './AIInsightsCard';
 import { AIFinanceService } from '../services/aiFinanceService';
+import { PeerService } from '../services/peerService';
 
 interface DashboardViewProps {
   expenses: Expense[];
@@ -35,7 +35,7 @@ interface DashboardViewProps {
   onOpenAddModal: () => void;
   onEditExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
-  onNavigateToTab: (tab: 'expenses' | 'budgets' | 'analytics' | 'ai-assistant') => void;
+  onNavigateToTab: (tab: 'expenses' | 'budgets' | 'ai-assistant' | 'peer-ledger') => void;
   onViewReceipt?: (url: string) => void;
 }
 
@@ -123,32 +123,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     <div className="space-y-6 pb-12">
 
       {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-slate-900/20 border border-slate-900 p-6 sm:p-8 shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-900/10 border border-slate-900 p-6 sm:p-7 shadow-sm">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>SpendWise AI Agent</span>
+            <div className="flex items-center space-x-1.5 text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">
+              <span>SpendWise Financial Agent</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-outfit font-black tracking-tight text-white">
+            <h1 className="text-xl sm:text-2xl font-outfit font-bold tracking-tight text-white animate-fade-in">
               Hello Mohit 👋
             </h1>
-            <p className="text-slate-400 text-xs mt-1.5 max-w-xl leading-relaxed">
+            <p className="text-slate-400 text-xs mt-1 max-w-xl leading-relaxed">
               Your AI Assistant has analyzed {monthExpenses.length} transactions for {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. Everything is fully synced.
             </p>
           </div>
 
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => onNavigateToTab('ai-assistant')}
-              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-indigo-400 hover:text-indigo-300 text-xs font-semibold flex items-center space-x-2 transition duration-200 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-semibold flex items-center space-x-2 transition duration-200 cursor-pointer"
             >
-              <Bot className="w-4 h-4" />
+              <Bot className="w-3.5 h-3.5" />
               <span>Consult AI Coach</span>
             </button>
             <button
               onClick={onOpenAddModal}
-              className="px-4 py-2.5 rounded-xl bg-white text-slate-950 text-xs font-bold flex items-center space-x-1.5 hover:bg-slate-100 transition duration-200 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-white text-slate-950 text-xs font-bold flex items-center space-x-1 hover:bg-slate-100 transition duration-200 cursor-pointer"
             >
               <span>+ Log Record</span>
             </button>
@@ -160,14 +159,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Today's Spending */}
-        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
+          <div className="flex items-center justify-between text-slate-450 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Today</span>
-            <div className="p-2 rounded-xl bg-amber-500/5 text-amber-500 border border-amber-500/10">
-              <Clock className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
+              <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl font-bold font-outfit text-white">
+          <div className="text-xl font-bold font-outfit text-white">
             {formatCurrency(todayTotal)}
           </div>
           <p className="text-[10px] text-slate-500 mt-1 font-medium">
@@ -176,17 +175,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* This Month Total */}
-        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
+          <div className="flex items-center justify-between text-slate-450 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">This Month</span>
-            <div className="p-2 rounded-xl bg-indigo-500/5 text-indigo-400 border border-indigo-500/10">
-              <Calendar className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
+              <Calendar className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl font-bold font-outfit text-white">
+          <div className="text-xl font-bold font-outfit text-white">
             {formatCurrency(monthTotal)}
           </div>
-          <div className="flex items-center space-x-2 mt-1.5">
+          <div className="flex items-center space-x-2 mt-1">
             <span className="text-[10px] text-slate-500 font-medium">
               {budgetPercentage}% of {formatCurrency(totalAllocatedBudget)} budget
             </span>
@@ -194,35 +193,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Remaining Budget */}
-        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
+          <div className="flex items-center justify-between text-slate-450 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Remaining Pool</span>
-            <div className="p-2 rounded-xl bg-emerald-500/5 text-emerald-400 border border-emerald-500/10">
-              <Wallet className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
+              <Wallet className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl font-bold font-outfit text-emerald-400">
+          <div className="text-xl font-bold font-outfit text-white">
             {formatCurrency(remainingBudget)}
           </div>
-          <div className="w-full bg-slate-950 rounded-full h-1 mt-2.5 overflow-hidden">
+          <div className="w-full bg-slate-950 rounded-full h-1 mt-2.5 overflow-hidden border border-slate-900">
             <div 
-              className={`h-full rounded-full transition-all duration-500 ${
-                budgetPercentage > 90 ? 'bg-red-500' : budgetPercentage > 75 ? 'bg-amber-500' : 'bg-emerald-400'
-              }`} 
+              className="h-full rounded-full transition-all duration-500 bg-white" 
               style={{ width: `${budgetPercentage}%` }}
             />
           </div>
         </div>
 
         {/* Daily Average */}
-        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-800 transition-all duration-300">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
+          <div className="flex items-center justify-between text-slate-450 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Daily Average</span>
-            <div className="p-2 rounded-xl bg-purple-500/5 text-purple-400 border border-purple-500/10">
-              <TrendingUp className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
+              <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-2xl font-bold font-outfit text-white">
+          <div className="text-xl font-bold font-outfit text-white">
             {formatCurrency(dailyAverage)}
           </div>
           <p className="text-[10px] text-slate-500 mt-1 font-medium">
@@ -249,7 +246,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <p className="text-[10px] text-slate-500">Monthly spend share</p>
             </div>
             <button 
-              onClick={() => onNavigateToTab('analytics')}
+              onClick={() => onNavigateToTab('expenses')}
               className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center cursor-pointer"
             >
               Details <ChevronRight className="w-3.5 h-3.5" />
@@ -408,42 +405,98 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* AI Assistant Quick Launcher Card */}
-        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold mb-2">
-              <Bot className="w-4 h-4" />
-              <span>AI COACHING</span>
-            </div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wide">Financial Insights</h3>
-            <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
-              Ask your AI Agent about monthly trends, budget balances, or purchase approvals.
-            </p>
+        {/* Right Column: Peer Ledger & AI Assistant */}
+        <div className="flex flex-col gap-6">
+          {/* Peer Ledger Overview Card */}
+          <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold">
+                  <Users className="w-4 h-4" />
+                  <span>PEER LEDGER</span>
+                </div>
+                <button 
+                  onClick={() => onNavigateToTab('peer-ledger')}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center cursor-pointer"
+                >
+                  Manage <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
-            <div className="mt-4 space-y-2">
-              <button
-                onClick={() => onNavigateToTab('ai-assistant')}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
-              >
-                <span>"How much did I spend this month?"</span>
-                <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-              <button
-                onClick={() => onNavigateToTab('ai-assistant')}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
-              >
-                <span>"Can I afford a ₹3,000 purchase?"</span>
-                <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
+              {/* Quick Summary Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-4 bg-slate-950/40 p-3 rounded-xl border border-slate-900">
+                <div>
+                  <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Owed to Me</div>
+                  <div className="text-sm font-bold font-outfit text-emerald-400 mt-0.5">
+                    {formatCurrency(PeerService.getOwedToMe())}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">I Owe</div>
+                  <div className="text-sm font-bold font-outfit text-amber-500 mt-0.5">
+                    {formatCurrency(PeerService.getIOwe())}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top 2 Pending Transactions */}
+              <div className="space-y-2">
+                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active Debts</div>
+                {PeerService.getPeerRecords().filter(r => r.status === 'pending').slice(0, 2).map(r => (
+                  <div key={r.id} className="flex items-center justify-between p-2 rounded bg-slate-950/20 text-[10px] border border-slate-900/40">
+                    <div className="truncate pr-2">
+                      <span className="font-semibold text-white">{r.name}</span>
+                      <span className="text-slate-500 block truncate">{r.description}</span>
+                    </div>
+                    <span className={`font-bold shrink-0 ${r.type === 'lent' ? 'text-emerald-400' : 'text-amber-500'}`}>
+                      {r.type === 'lent' ? '+' : '-'}{formatCurrency(r.amount)}
+                    </span>
+                  </div>
+                ))}
+                {PeerService.getPeerRecords().filter(r => r.status === 'pending').length === 0 && (
+                  <div className="text-center text-[10px] text-slate-500 py-2">No pending peer balances!</div>
+                )}
+              </div>
             </div>
           </div>
 
-          <button
-            onClick={() => onNavigateToTab('ai-assistant')}
-            className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center space-x-2 transition shadow-md shadow-indigo-600/10 cursor-pointer"
-          >
-            <span>Open AI Chat</span>
-          </button>
+          {/* AI Assistant Quick Launcher Card */}
+          <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center space-x-2 text-indigo-400 text-xs font-bold mb-2">
+                <Bot className="w-4 h-4" />
+                <span>AI COACHING</span>
+              </div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wide">Financial Insights</h3>
+              <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                Ask your AI Agent about monthly trends, budget balances, or purchase approvals.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={() => onNavigateToTab('ai-assistant')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
+                >
+                  <span>"How much did I spend this month?"</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+                </button>
+                <button
+                  onClick={() => onNavigateToTab('ai-assistant')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-950/80 border border-slate-900 hover:border-slate-800 text-[10px] text-slate-400 hover:text-white transition flex items-center justify-between cursor-pointer"
+                >
+                  <span>"Can I afford a ₹3,000 purchase?"</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onNavigateToTab('ai-assistant')}
+              className="mt-6 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center space-x-2 transition shadow-md shadow-indigo-600/10 cursor-pointer"
+            >
+              <span>Open AI Chat</span>
+            </button>
+          </div>
         </div>
 
       </div>
