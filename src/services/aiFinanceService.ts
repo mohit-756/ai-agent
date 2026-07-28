@@ -95,6 +95,142 @@ export class AIFinanceService {
   }
 
   /**
+   * Natural Language Parser for Peer Records
+   * Extracts lent/borrowed records from text like "Lent ₹500 to Sneha for cab"
+   */
+  public static parseNaturalLanguagePeerRecord(text: string): {
+    isPeerRecord: boolean;
+    type?: 'lent' | 'borrowed';
+    peerName?: string;
+    amount?: number;
+    description?: string;
+    date?: string;
+    dueDate?: string;
+  } {
+    const lower = text.toLowerCase();
+    
+    // Check if there are peer keywords: lent, lend, borrow, borrowed, owe, owes, took, gave
+    const peerKeywords = ['lent', 'lend', 'borrowed', 'borrow', 'took from', 'gave to', 'split with', 'owes me', 'i owe'];
+    const hasPeerKeyword = peerKeywords.some(kw => lower.includes(kw));
+    
+    if (!hasPeerKeyword) {
+      return { isPeerRecord: false };
+    }
+    
+    // Extract amount
+    let amount: number | null = null;
+    const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
+    const amountMatch = text.match(amountRegex);
+    if (amountMatch) {
+      const rawNum = (amountMatch[1] || amountMatch[2]).replace(/,/g, '');
+      const parsed = parseFloat(rawNum);
+      if (!isNaN(parsed) && parsed > 0) {
+        amount = parsed;
+      }
+    }
+    
+    if (!amount) {
+      return { isPeerRecord: false };
+    }
+    
+    // Determine type: lent or borrowed
+    let type: 'lent' | 'borrowed' = 'lent';
+    if (lower.includes('borrowed') || lower.includes('took from') || lower.includes('i owe')) {
+      type = 'borrowed';
+    }
+    
+    // Try to extract peer name and description
+    let peerName = 'Friend';
+    let description = 'Peer Split';
+    
+    const toRegex = /(?:lent|gave\s+to|split\s+with|to)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
+    const fromRegex = /(?:borrowed|took\s+from|from)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
+    
+    let nameMatch = null;
+    if (type === 'lent') {
+      nameMatch = text.match(toRegex);
+    } else {
+      nameMatch = text.match(fromRegex);
+    }
+    
+    if (nameMatch && nameMatch[1]) {
+      const candidate = nameMatch[1].trim();
+      const lowerCandidate = candidate.toLowerCase();
+      if (candidate.length > 0 && !/\d/.test(candidate) && lowerCandidate !== 'yesterday' && lowerCandidate !== 'today') {
+        peerName = candidate;
+      }
+    } else {
+      const words = text.split(/\s+/);
+      const nameKeywords = ['to', 'from', 'with'];
+      for (let i = 0; i < words.length - 1; i++) {
+        if (nameKeywords.includes(words[i].toLowerCase())) {
+          const nextWord = words[i+1].replace(/[^a-zA-Z]/g, '');
+          if (nextWord && nextWord[0] === nextWord[0].toUpperCase()) {
+            peerName = nextWord;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Parse Record Date (Yesterday, YYYY-MM-DD)
+    let recordDate = new Date().toISOString().split('T')[0];
+    if (lower.includes('yesterday')) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      recordDate = yesterday.toISOString().split('T')[0];
+    } else {
+      const dateMatch = lower.match(/\bon\s+(\d{4}-\d{2}-\d{2})\b/);
+      if (dateMatch) {
+        recordDate = dateMatch[1];
+      }
+    }
+
+    // Parse Due Date / Reminder (due tomorrow, due next week, due YYYY-MM-DD)
+    let dueDateStr: string | undefined = undefined;
+    if (lower.includes('due tomorrow')) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      dueDateStr = tomorrow.toISOString().split('T')[0];
+    } else if (lower.includes('due next week')) {
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      dueDateStr = nextWeek.toISOString().split('T')[0];
+    } else {
+      const dueMatch = lower.match(/\bdue\s+(\d{4}-\d{2}-\d{2})\b/);
+      if (dueMatch) {
+        dueDateStr = dueMatch[1];
+      }
+    }
+
+    // Parse description: anything after "for" (exclude date/due clauses)
+    const forRegex = /\bfor\s+([a-zA-Z0-9\s]+?)(?:\s+on|\s+due|$)/i;
+    const forMatch = text.match(forRegex);
+    if (forMatch && forMatch[1]) {
+      description = forMatch[1].trim();
+    } else {
+      description = text.replace(amountRegex, '').replace(/\b(?:lent|borrowed|to|from|for|split|with|on|due|yesterday|tomorrow|next week)\b/gi, '').replace(/\s+/g, ' ').trim();
+      if (description.length > 25) {
+        description = description.slice(0, 25) + '...';
+      }
+    }
+    
+    if (peerName.toLowerCase().includes(' for ')) {
+      peerName = peerName.split(/ for /i)[0].trim();
+    }
+    
+    return {
+      isPeerRecord: true,
+      type,
+      peerName,
+      amount,
+      description: description || (type === 'lent' ? `Lent to ${peerName}` : `Borrowed from ${peerName}`),
+      date: recordDate,
+      dueDate: dueDateStr
+    };
+  }
+
+  /**
    * Automated Smart Insights Engine
    */
   public static generateSpendingInsights(expenses: Expense[], _budgets: Budget[]): AIInsight[] {

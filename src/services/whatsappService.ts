@@ -2,6 +2,7 @@ import type { WhatsAppMessage, Expense } from '../types/expense';
 import { AIFinanceService } from './aiFinanceService';
 import { ExpenseService, formatCurrency } from './expenseService';
 import { BudgetService } from './budgetService';
+import { PeerService } from './peerService';
 
 const WHATSAPP_STORAGE_KEY = 'ai_expense_tracker_whatsapp_chats';
 
@@ -9,7 +10,7 @@ const INITIAL_WHATSAPP_CHAT: WhatsAppMessage[] = [
   {
     id: 'wa-1',
     sender: 'bot',
-    body: `👋 *Welcome to SpendWise WhatsApp Bot!*\n\nYou can text me your daily expenses anytime!\n\n*Examples:*\n• "Spent ₹250 on Swiggy lunch"\n• "Uber ride ₹180 via UPI"\n• "How much did I spend this month?"`,
+    body: `👋 *Welcome to SpendWise WhatsApp Bot!*\n\nYou can text me your daily expenses or peer loans anytime!\n\n*Examples:*\n• "Spent ₹250 on Swiggy lunch"\n• "Lent ₹500 to Rohit for dinner split"\n• "Borrowed ₹300 from Amit for cab"\n• "How much did I spend this month?"`,
     timestamp: new Date(Date.now() - 3600000 * 5).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 ];
@@ -53,11 +54,32 @@ export class WhatsAppService {
     };
 
     // 2. Parse using AI Engine
+    const peerParsed = AIFinanceService.parseNaturalLanguagePeerRecord(userText);
     const parsed = AIFinanceService.parseNaturalLanguageExpense(userText);
     let botResponseBody = '';
     let addedExpense: Expense | undefined = undefined;
 
-    if (parsed.amount && parsed.amount > 0) {
+    if (peerParsed.isPeerRecord && peerParsed.amount && peerParsed.peerName) {
+      // Auto Add Peer Record
+      PeerService.addPeerRecord({
+        name: peerParsed.peerName,
+        originalAmount: peerParsed.amount,
+        type: peerParsed.type || 'lent',
+        description: peerParsed.description || 'WhatsApp Entry',
+        date: peerParsed.date || new Date().toISOString().split('T')[0],
+        dueDate: peerParsed.dueDate
+      });
+
+      botResponseBody = `👥 *Peer Ledger Record Added!*\n\n` +
+        `• *Person:* ${peerParsed.peerName}\n` +
+        `• *Type:* ${peerParsed.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
+        `• *Amount:* ${formatCurrency(peerParsed.amount)}\n` +
+        `• *Description:* ${peerParsed.description}\n` +
+        `• *Date Taken:* ${peerParsed.date}\n` +
+        (peerParsed.dueDate ? `⏰ *Due Date:* ${peerParsed.dueDate}\n` : '') +
+        `\nOutstanding balance updated in Peer Ledger!`;
+
+    } else if (parsed.amount && parsed.amount > 0) {
       // Auto Add Expense
       addedExpense = ExpenseService.addExpense({
         amount: parsed.amount,

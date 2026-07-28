@@ -120,7 +120,8 @@ export function App() {
 
   const handleExpenseAddedByWhatsApp = () => {
     setExpenses(ExpenseService.getExpenses());
-    showToast('Expense logged via WhatsApp!');
+    handleUpdatePeerMetrics();
+    showToast('Record synced via WhatsApp!');
   };
 
   const insightsCount = AIFinanceService.generateSpendingInsights(expenses, budgets).length;

@@ -97,6 +97,98 @@ function parseTextExpense(text: string) {
   };
 }
 
+function parseTextPeerRecord(text: string) {
+  const lower = text.toLowerCase();
+  
+  // Check if there are peer keywords: lent, lend, borrow, borrowed, owe, owes, took, gave
+  const peerKeywords = ['lent', 'lend', 'borrowed', 'borrow', 'took from', 'gave to', 'split with', 'owes me', 'i owe'];
+  const hasPeerKeyword = peerKeywords.some(kw => lower.includes(kw));
+  
+  if (!hasPeerKeyword) {
+    return { isPeerRecord: false };
+  }
+  
+  // Extract amount
+  let amount: number | null = null;
+  const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
+  const amountMatch = text.match(amountRegex);
+  if (amountMatch) {
+    const rawNum = (amountMatch[1] || amountMatch[2]).replace(/,/g, '');
+    const parsed = parseFloat(rawNum);
+    if (!isNaN(parsed) && parsed > 0) {
+      amount = parsed;
+    }
+  }
+  
+  if (!amount) {
+    return { isPeerRecord: false };
+  }
+  
+  // Determine type: lent or borrowed
+  let type: 'lent' | 'borrowed' = 'lent';
+  if (lower.includes('borrowed') || lower.includes('took from') || lower.includes('i owe')) {
+    type = 'borrowed';
+  }
+  
+  // Try to extract peer name and description
+  let peerName = 'Friend';
+  let description = 'Peer Split';
+  
+  const toRegex = /(?:lent|gave\s+to|split\s+with|to)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
+  const fromRegex = /(?:borrowed|took\s+from|from)\s+([a-zA-Z\s]+?)(?:\s+for|\s+via|\s+date|\s+due|\s*₹|\s*\d|$)/i;
+  
+  let nameMatch = null;
+  if (type === 'lent') {
+    nameMatch = text.match(toRegex);
+  } else {
+    nameMatch = text.match(fromRegex);
+  }
+  
+  if (nameMatch && nameMatch[1]) {
+    const candidate = nameMatch[1].trim();
+    const lowerCandidate = candidate.toLowerCase();
+    if (candidate.length > 0 && !/\d/.test(candidate) && lowerCandidate !== 'yesterday' && lowerCandidate !== 'today') {
+      peerName = candidate;
+    }
+  } else {
+    const words = text.split(/\s+/);
+    const nameKeywords = ['to', 'from', 'with'];
+    for (let i = 0; i < words.length - 1; i++) {
+      if (nameKeywords.includes(words[i].toLowerCase())) {
+        const nextWord = words[i+1].replace(/[^a-zA-Z]/g, '');
+        if (nextWord && nextWord[0] === nextWord[0].toUpperCase()) {
+          peerName = nextWord;
+          break;
+        }
+      }
+    }
+  }
+  
+  // Parse description: anything after "for"
+  const forRegex = /\bfor\s+([a-zA-Z0-9\s]+)$/i;
+  const forMatch = text.match(forRegex);
+  if (forMatch && forMatch[1]) {
+    description = forMatch[1].trim();
+  } else {
+    description = text.replace(amountRegex, '').replace(/\b(?:lent|borrowed|to|from|for|split|with)\b/gi, '').replace(/\s+/g, ' ').trim();
+    if (description.length > 25) {
+      description = description.slice(0, 25) + '...';
+    }
+  }
+  
+  if (peerName.toLowerCase().includes(' for ')) {
+    peerName = peerName.split(/ for /i)[0].trim();
+  }
+  
+  return {
+    isPeerRecord: true,
+    type,
+    peerName,
+    amount,
+    description: description || (type === 'lent' ? `Lent to ${peerName}` : `Borrowed from ${peerName}`)
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const whatsappToken = process.env.WHATSAPP_TOKEN;
 
@@ -138,6 +230,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           merchant: '',
           paymentMethod: 'UPI',
           date: new Date().toISOString().split('T')[0]
+        };
+        let isPeerRecord = false;
+        let peerRecordData = {
+          peerName: '',
+          type: 'lent' as 'lent' | 'borrowed',
+          amount: 0,
+          description: '',
+          date: '',
+          dueDate: undefined as string | undefined
         };
         let receiptUrl: string | undefined = undefined;
         let isImage = false;
@@ -277,12 +378,72 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
         } else {
           // Process standard text messages
           const msgText = msg.text?.body || '';
-          parsed = parseTextExpense(msgText);
+          const peerParsed = parseTextPeerRecord(msgText);
+          if (peerParsed.isPeerRecord && peerParsed.amount) {
+            isPeerRecord = true;
+            peerRecordData = {
+              peerName: peerParsed.peerName || 'Friend',
+              type: peerParsed.type || 'lent',
+              amount: peerParsed.amount,
+              description: peerParsed.description || 'Peer Split',
+              date: peerParsed.date || new Date().toISOString().split('T')[0],
+              dueDate: peerParsed.dueDate
+            };
+          } else {
+            parsed = parseTextExpense(msgText);
+          }
         }
 
         let replyBody = '';
 
-        if (parsed.amount) {
+        if (isPeerRecord && peerRecordData.amount) {
+          if (supabase) {
+            const { error } = await supabase.from('peer_records').insert([{
+              name: peerRecordData.peerName,
+              amount: peerRecordData.amount,
+              original_amount: peerRecordData.amount,
+              type: peerRecordData.type,
+              description: peerRecordData.description,
+              date: peerRecordData.date,
+              due_date: peerRecordData.dueDate || null,
+              status: 'pending'
+            }]);
+
+            if (error) {
+              console.warn('peer_records write error, fallback to expenses table:', error.message);
+              // Fallback to inserting as a standard expense labeled as 'Others'
+              const { error: expError } = await supabase.from('expenses').insert([{
+                amount: peerRecordData.amount,
+                category: 'Others',
+                description: `${peerRecordData.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${peerRecordData.peerName}: ${peerRecordData.description}`,
+                date: peerRecordData.date,
+                source: 'whatsapp',
+                notes: `Logged as expense fallback (peer_records table write failed)`
+              }]);
+
+              if (expError) {
+                replyBody = `⚠️ Error saving peer record: ${expError.message}`;
+              } else {
+                replyBody = `👥 *Logged to Expenses (Fallback)*\n\n` +
+                  `• *Detail:* ${peerRecordData.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${peerRecordData.peerName}\n` +
+                  `• *Amount:* ₹${peerRecordData.amount}\n` +
+                  `• *Desc:* ${peerRecordData.description}\n\n` +
+                  `*Note:* To save this specifically as a Peer Ledger entry, please create a \`peer_records\` table in your Supabase database.`;
+              }
+            } else {
+              replyBody = `👥 *Peer Ledger Record Added!*\n\n` +
+                `• *Person:* ${peerRecordData.peerName}\n` +
+                `• *Type:* ${peerRecordData.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
+                `• *Amount:* ₹${peerRecordData.amount}\n` +
+                `• *Description:* ${peerRecordData.description}\n` +
+                `• *Date Taken:* ${peerRecordData.date}\n` +
+                (peerRecordData.dueDate ? `⏰ *Due Date:* ${peerRecordData.dueDate}\n` : '') +
+                `\nSynced with your SpendWise database!`;
+            }
+          } else {
+            replyBody = `👥 *Parsed Peer Record!*\n\n• *Person:* ${peerRecordData.peerName}\n• *Type:* ${peerRecordData.type === 'lent' ? 'Lent' : 'Borrowed'}\n• *Amount:* ₹${peerRecordData.amount}\n• *Desc:* ${peerRecordData.description}\n\n*Note:* Connect your Supabase database in Vercel settings to save permanently.`;
+          }
+        } else if (parsed.amount) {
           if (supabase) {
             const { error } = await supabase.from('expenses').insert([{
               amount: parsed.amount,
@@ -311,7 +472,7 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
             replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Merchant:* ${parsed.merchant || 'N/A'}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
           }
         } else if (!isImage) {
-          replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
+          replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
         }
 
         // Send Reply via Meta Cloud API for successful text parses or successful image parses
