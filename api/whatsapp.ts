@@ -351,6 +351,44 @@ function parseTextPeerRecord(text: string) {
   };
 }
 
+function parseTextPayback(text: string) {
+  const lower = text.toLowerCase();
+  const isPaybackPattern = /\b(paid|payback|settled|returned|repaid)\b/i.test(lower);
+  if (!isPaybackPattern) {
+    return { isPayback: false, peerName: '', amount: null };
+  }
+
+  // Extract amount
+  let amount: number | null = null;
+  const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
+  const amountMatch = text.match(amountRegex);
+  if (amountMatch) {
+    const rawNum = (amountMatch[1] || amountMatch[2]).replace(/,/g, '');
+    const parsed = parseFloat(rawNum);
+    if (!isNaN(parsed) && parsed > 0) {
+      amount = parsed;
+    }
+  }
+
+  // Extract peer name candidate
+  let peerName = '';
+  const words = text.split(/\s+/);
+  const stopWords = ['paid', 'back', 'settled', 'returned', 'repaid', 'from', 'by', 'to', 'for', 'rs', 'inr', 'rupees', 'money', 'full', 'half', 'payback'];
+  for (const w of words) {
+    const cleaned = w.replace(/[^a-zA-Z]/g, '');
+    if (cleaned.length > 1 && !stopWords.includes(cleaned.toLowerCase()) && !/^\d+$/.test(cleaned)) {
+      peerName = cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+      break;
+    }
+  }
+
+  return {
+    isPayback: true,
+    peerName,
+    amount
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const whatsappToken = process.env.WHATSAPP_TOKEN;
 
@@ -401,6 +439,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           description: '',
           date: '',
           dueDate: undefined as string | undefined
+        };
+        let isPayback = false;
+        let paybackData = {
+          peerName: '',
+          amount: null as number | null
         };
         let receiptUrl: string | undefined = undefined;
         let isImage = false;
@@ -540,25 +583,69 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
         } else {
           // Process standard text messages
           const msgText = msg.text?.body || '';
-          const peerParsed = parseTextPeerRecord(msgText);
-          if (peerParsed.isPeerRecord && peerParsed.amount) {
-            isPeerRecord = true;
-            peerRecordData = {
-              peerName: peerParsed.peerName || 'Friend',
-              type: peerParsed.type || 'lent',
-              amount: peerParsed.amount,
-              description: peerParsed.description || 'Peer Split',
-              date: peerParsed.date || new Date().toISOString().split('T')[0],
-              dueDate: peerParsed.dueDate
-            };
+          
+          // Check for Payback pattern
+          const paybackParsed = parseTextPayback(msgText);
+          if (paybackParsed.isPayback) {
+            isPayback = true;
+            paybackData = paybackParsed;
           } else {
-            parsed = parseTextExpense(msgText);
+            const peerParsed = parseTextPeerRecord(msgText);
+            if (peerParsed.isPeerRecord && peerParsed.amount) {
+              isPeerRecord = true;
+              peerRecordData = {
+                peerName: peerParsed.peerName || 'Friend',
+                type: peerParsed.type || 'lent',
+                amount: peerParsed.amount,
+                description: peerParsed.description || 'Peer Split',
+                date: peerParsed.date || new Date().toISOString().split('T')[0],
+                dueDate: peerParsed.dueDate
+              };
+            } else {
+              parsed = parseTextExpense(msgText);
+            }
           }
         }
 
         let replyBody = '';
 
-        if (isPeerRecord && peerRecordData.amount) {
+        if (isPayback && supabase) {
+          if (paybackData.peerName) {
+            const { data: peerMatches } = await supabase
+              .from('peer_records')
+              .select('*')
+              .ilike('name', `%${paybackData.peerName}%`)
+              .eq('status', 'pending')
+              .order('created_at', { ascending: false });
+
+            if (peerMatches && peerMatches.length > 0) {
+              const targetRecord = peerMatches[0];
+              const paidAmount = paybackData.amount || Number(targetRecord.amount);
+              const newOutstanding = Math.max(0, Number(targetRecord.amount) - paidAmount);
+              const newStatus = newOutstanding === 0 ? 'settled' : 'pending';
+
+              const { error: updateErr } = await supabase
+                .from('peer_records')
+                .update({ amount: newOutstanding, status: newStatus })
+                .eq('id', targetRecord.id);
+
+              if (updateErr) {
+                replyBody = `⚠️ Error updating payback record: ${updateErr.message}`;
+              } else {
+                replyBody = `🤝 *Payback Logged & Synced!*\n\n` +
+                  `• *Person:* ${targetRecord.name}\n` +
+                  `• *Amount Received:* ₹${paidAmount}\n` +
+                  `• *Remaining Outstanding:* ₹${newOutstanding}\n` +
+                  `• *Status:* ${newStatus === 'settled' ? 'Fully Settled ✅' : 'Pending ⏳'}\n\n` +
+                  `Synced directly with your SpendWise Peer Ledger!`;
+              }
+            } else {
+              replyBody = `⚠️ Couldn't find an active pending record for "*${paybackData.peerName}*".\nCheck your Peer Ledger on the SpendWise dashboard!`;
+            }
+          } else {
+            replyBody = `⚠️ Could not identify the peer name for payback. Please specify like: _"Dileep paid back 1000"_.`;
+          }
+        } else if (isPeerRecord && peerRecordData.amount) {
           if (supabase) {
             const { error } = await supabase.from('peer_records').insert([{
               name: peerRecordData.peerName,
@@ -630,12 +717,95 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
                 `• *Category:* ${parsed.category}\n` +
                 `• *Payment:* ${parsed.paymentMethod}\n\n` +
                 `Synced instantly with your SpendWise Dashboard!`;
+
+              // Check category budget threshold warnings
+              try {
+                const DEFAULT_BUDGETS: Record<string, number> = {
+                  'Food & Dining': 5000,
+                  'Transportation': 3000,
+                  'Shopping & Retail': 5000,
+                  'Bills & Utilities': 5000,
+                  'Entertainment': 2000,
+                  'Health & Wellness': 3000,
+                  'Travel': 10000,
+                  'Education': 5000,
+                  'Services': 3000,
+                  'Others': 3000
+                };
+                const now = new Date();
+                const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                const { data: monthExps } = await supabase
+                  .from('expenses')
+                  .select('amount')
+                  .eq('category', parsed.category)
+                  .gte('date', firstDayStr);
+
+                const catSum = monthExps ? monthExps.reduce((acc, e) => acc + Number(e.amount), 0) : parsed.amount;
+                const cap = DEFAULT_BUDGETS[parsed.category] || 5000;
+                const pct = Math.round((catSum / cap) * 100);
+
+                if (pct >= 80) {
+                  replyBody += `\n\n⚠️ *Budget Alert:* You've spent ₹${catSum.toLocaleString('en-IN')} of your ₹${cap.toLocaleString('en-IN')} ${parsed.category} limit this month (${pct}%)!`;
+                }
+              } catch (bErr) {
+                console.warn('Budget threshold check failed:', bErr);
+              }
             }
           } else {
             replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Merchant:* ${parsed.merchant || 'N/A'}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
           }
-        } else if (!isImage) {
-          replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
+        } else if (!isImage && msg.text?.body) {
+          // 2-Way Conversational Assistant for Q&A financial queries
+          if (supabase && genAI) {
+            try {
+              const { data: peers } = await supabase.from('peer_records').select('*').eq('status', 'pending');
+              const { data: recentExps } = await supabase.from('expenses').select('*').order('date', { ascending: false }).limit(15);
+
+              const lentTotal = peers ? peers.filter(p => p.type === 'lent').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
+              const borrowedTotal = peers ? peers.filter(p => p.type === 'borrowed').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
+
+              const peerSummary = peers && peers.length > 0
+                ? peers.map(p => `- ${p.name}: ${p.type === 'lent' ? 'owes you' : 'you owe'} ₹${p.amount} for "${p.description}" (Due: ${p.due_date || 'No deadline'})`).join('\n')
+                : 'No active peer debts.';
+
+              const expSummary = recentExps && recentExps.length > 0
+                ? recentExps.map(e => `- ₹${e.amount} on ${e.category} (${e.description || e.merchant || 'Expense'}) on ${e.date}`).join('\n')
+                : 'No recent expenses.';
+
+              const prompt = `You are SpendWise AI Assistant on WhatsApp. Answer the user's financial question concisely and helpfully using their current financial data context. Use bullet points and WhatsApp bold (*text*) formatting. Keep your response under 150 words.
+
+Current Financial Context:
+- Net Peer Ledger: You are owed ₹${lentTotal}, You owe ₹${borrowedTotal}.
+- Active Pending Peer Records:
+${peerSummary}
+
+- Recent Expense Logs (Last 15):
+${expSummary}
+
+User's Question: "${msg.text.body}"`;
+
+              let aiAnswer = null;
+              const modelsToTry = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+              for (const m of modelsToTry) {
+                try {
+                  const model = genAI.getGenerativeModel({ model: m });
+                  const res = await model.generateContent(prompt);
+                  aiAnswer = res.response.text().trim();
+                  break;
+                } catch (err) {}
+              }
+
+              if (aiAnswer) {
+                replyBody = aiAnswer;
+              } else {
+                replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr ask questions:\n_"Who owes me money?"_`;
+              }
+            } catch (qErr) {
+              replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr ask questions:\n_"Who owes me money?"_`;
+            }
+          } else {
+            replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
+          }
         }
 
         // Send Reply via Meta Cloud API for successful text parses or successful image parses

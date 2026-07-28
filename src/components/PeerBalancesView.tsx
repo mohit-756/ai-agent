@@ -14,11 +14,13 @@ import {
   ChevronUp, 
   UserCheck, 
   CalendarClock, 
-  History 
+  History,
+  Download
 } from 'lucide-react';
 import { PeerService } from '../services/peerService';
 import type { PeerRecord, PeerSummary } from '../types/peer';
 import { formatCurrency } from '../services/expenseService';
+import { exportPeerRecordsToCSV } from '../utils/csvExport';
 
 interface PeerBalancesViewProps {
   theme: 'neon' | 'mono';
@@ -254,17 +256,26 @@ export const PeerBalancesView: React.FC<PeerBalancesViewProps> = ({ theme, onUpd
             Track money lent to friends, paybacks, and setup reminder notifications.
           </p>
         </div>
-        <button
-          onClick={handleOpenAddModal}
-          className={`flex items-center space-x-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
-            theme === 'mono'
-              ? 'bg-white text-black hover:bg-neutral-200 shadow-md'
-              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10'
-          }`}
-        >
-          <Plus className="w-4 h-4" />
-          <span>Log Peer Transaction</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => exportPeerRecordsToCSV(PeerService.getPeerRecords())}
+            className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold transition duration-200 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-indigo-400" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            className={`flex items-center space-x-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
+              theme === 'mono'
+                ? 'bg-white text-black hover:bg-neutral-200 shadow-md'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Log Peer Transaction</span>
+          </button>
+        </div>
       </div>
 
       {/* Peer Summary Cards */}
