@@ -97,6 +97,31 @@ function parseTextExpense(text: string) {
   };
 }
 
+function parseFlexibleDate(str: string): string {
+  const clean = str.trim().replace(/[^0-9-/]/g, '');
+  
+  // 1. Matches YYYY-MM-DD
+  const ymd = clean.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
+  if (ymd) {
+    return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+  }
+  
+  // 2. Matches DD-MM-YYYY or DD/MM/YYYY
+  const dmy = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (dmy) {
+    return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  }
+
+  // 3. Matches DD-MM-YY or DD/MM/YY
+  const dmyShort = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})$/);
+  if (dmyShort) {
+    const year = parseInt(dmyShort[3]) < 50 ? `20${dmyShort[3]}` : `19${dmyShort[3]}`;
+    return `${year}-${dmyShort[2]}-${dmyShort[1]}`;
+  }
+
+  return clean;
+}
+
 function parseTextPeerRecord(text: string) {
   const lower = text.toLowerCase();
   
@@ -146,9 +171,8 @@ function parseTextPeerRecord(text: string) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         recDate = yesterday.toISOString().split('T')[0];
-      } else {
-        const m = parsedDate.match(/\d{4}-\d{2}-\d{2}/);
-        if (m) recDate = m[0];
+      } else if (parsedDate.trim()) {
+        recDate = parseFlexibleDate(parsedDate);
       }
 
       let dueD: string | undefined = undefined;
@@ -160,9 +184,8 @@ function parseTextPeerRecord(text: string) {
         const nextWeek = new Date();
         nextWeek.setDate(nextWeek.getDate() + 7);
         dueD = nextWeek.toISOString().split('T')[0];
-      } else {
-        const m = parsedDueDate.match(/\d{4}-\d{2}-\d{2}/);
-        if (m) dueD = m[0];
+      } else if (parsedDueDate.trim()) {
+        dueD = parseFlexibleDate(parsedDueDate);
       }
 
       return {
@@ -258,20 +281,20 @@ function parseTextPeerRecord(text: string) {
     peerName = peerName.charAt(0).toUpperCase() + peerName.slice(1);
   }
   
-  // Parse Record Date (Yesterday, YYYY-MM-DD)
+  // Parse Record Date (Yesterday, flexible formats)
   let recordDate = new Date().toISOString().split('T')[0];
   if (lower.includes('yesterday')) {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     recordDate = yesterday.toISOString().split('T')[0];
   } else {
-    const dateMatch = lower.match(/\bon\s+(\d{4}-\d{2}-\d{2})\b/);
+    const dateMatch = lower.match(/\bon\s+([\d]{2,4}[-/][\d]{2}[-/][\d]{2,4})\b/);
     if (dateMatch) {
-      recordDate = dateMatch[1];
+      recordDate = parseFlexibleDate(dateMatch[1]);
     }
   }
 
-  // Parse Due Date / Reminder (due tomorrow, due next week, due YYYY-MM-DD, remind tomorrow/tommorow)
+  // Parse Due Date / Reminder (due tomorrow, due next week, due flexible formats, remind tomorrow/tommorow)
   let dueDateStr: string | undefined = undefined;
   if (lower.includes('tomorrow') || lower.includes('tommorow') || lower.includes('remind tomorrow') || lower.includes('remind tommorow')) {
     const tomorrow = new Date();
@@ -282,9 +305,9 @@ function parseTextPeerRecord(text: string) {
     nextWeek.setDate(nextWeek.getDate() + 7);
     dueDateStr = nextWeek.toISOString().split('T')[0];
   } else {
-    const dueMatch = lower.match(/\bdue\s+(\d{4}-\d{2}-\d{2})\b/);
+    const dueMatch = lower.match(/\bdue\s+([\d]{2,4}[-/][\d]{2}[-/][\d]{2,4})\b/);
     if (dueMatch) {
-      dueDateStr = dueMatch[1];
+      dueDateStr = parseFlexibleDate(dueMatch[1]);
     }
   }
 
@@ -555,6 +578,7 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
                 amount: peerRecordData.amount,
                 category: 'Others',
                 description: `${peerRecordData.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${peerRecordData.peerName}: ${peerRecordData.description}`,
+                paymentmethod: 'UPI',
                 date: peerRecordData.date,
                 source: 'whatsapp',
                 notes: `Logged as expense fallback (peer_records table write failed)`
