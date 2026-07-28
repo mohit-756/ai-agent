@@ -1,4 +1,5 @@
 import type { PeerRecord, PeerSummary } from '../types/peer';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const PEER_STORAGE_KEY = 'ai_expense_tracker_peer_records';
 
@@ -87,6 +88,49 @@ export class PeerService {
     localStorage.setItem(PEER_STORAGE_KEY, JSON.stringify(records));
   }
 
+  /**
+   * Sync peer records from cloud database (Supabase) in background
+   */
+  public static async syncFromCloud(): Promise<PeerRecord[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('peer_records')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (error) throw error;
+        if (data) {
+          const cloudRecords: PeerRecord[] = data.map(item => ({
+            id: item.id.toString(),
+            name: item.name,
+            amount: Number(item.amount),
+            originalAmount: Number(item.original_amount ?? item.originalAmount ?? item.amount),
+            type: item.type as 'lent' | 'borrowed',
+            description: item.description || '',
+            date: item.date,
+            dueDate: item.due_date || item.dueDate || undefined,
+            status: (item.status as 'pending' | 'settled') || 'pending',
+            createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+            payments: item.payments || []
+          }));
+
+          // Merge cloud records with demo local records if not present
+          const localRecords = this.getPeerRecords();
+          const cloudIds = new Set(cloudRecords.map(r => r.id));
+          const localOnlyDemo = localRecords.filter(r => r.id.startsWith('peer-') && !cloudIds.has(r.id));
+          const merged = [...cloudRecords, ...localOnlyDemo];
+
+          this.savePeerRecords(merged);
+          return merged;
+        }
+      } catch (err) {
+        console.error('Failed to sync peer records from Supabase:', err);
+      }
+    }
+    return this.getPeerRecords();
+  }
+
   public static addPeerRecord(recordData: Omit<PeerRecord, 'id' | 'createdAt' | 'status' | 'payments' | 'amount'>): PeerRecord {
     const records = this.getPeerRecords();
     const newRecord: PeerRecord = {
@@ -100,6 +144,23 @@ export class PeerService {
 
     const updated = [newRecord, ...records];
     this.savePeerRecords(updated);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase) {
+      supabase.from('peer_records').insert([{
+        name: newRecord.name,
+        amount: newRecord.amount,
+        original_amount: newRecord.originalAmount,
+        type: newRecord.type,
+        description: newRecord.description,
+        date: newRecord.date,
+        due_date: newRecord.dueDate || null,
+        status: newRecord.status
+      }]).then(({ error }) => {
+        if (error) console.error('Error syncing addPeerRecord to Supabase:', error);
+      });
+    }
+
     return newRecord;
   }
 
@@ -126,6 +187,26 @@ export class PeerService {
 
     records[index] = updatedRecord;
     this.savePeerRecords(records);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !id.startsWith('peer-')) {
+      supabase.from('peer_records')
+        .update({
+          name: updatedRecord.name,
+          amount: updatedRecord.amount,
+          original_amount: updatedRecord.originalAmount,
+          type: updatedRecord.type,
+          description: updatedRecord.description,
+          date: updatedRecord.date,
+          due_date: updatedRecord.dueDate || null,
+          status: updatedRecord.status
+        })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing updatePeerRecord to Supabase:', error);
+        });
+    }
+
     return updatedRecord;
   }
 
@@ -134,6 +215,17 @@ export class PeerService {
     const filtered = records.filter(r => r.id !== id);
     if (filtered.length === records.length) return false;
     this.savePeerRecords(filtered);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !id.startsWith('peer-')) {
+      supabase.from('peer_records')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing deletePeerRecord to Supabase:', error);
+        });
+    }
+
     return true;
   }
 
@@ -168,6 +260,20 @@ export class PeerService {
 
     records[index] = updatedRecord;
     this.savePeerRecords(records);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !id.startsWith('peer-')) {
+      supabase.from('peer_records')
+        .update({
+          amount: updatedRecord.amount,
+          status: updatedRecord.status
+        })
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing recordPayback to Supabase:', error);
+        });
+    }
+
     return updatedRecord;
   }
 
@@ -193,6 +299,20 @@ export class PeerService {
 
     records[index] = updatedRecord;
     this.savePeerRecords(records);
+
+    // Sync in background to Supabase
+    if (isSupabaseConfigured && supabase && !recordId.startsWith('peer-')) {
+      supabase.from('peer_records')
+        .update({
+          amount: updatedRecord.amount,
+          status: updatedRecord.status
+        })
+        .eq('id', recordId)
+        .then(({ error }) => {
+          if (error) console.error('Error syncing removePayback to Supabase:', error);
+        });
+    }
+
     return updatedRecord;
   }
 

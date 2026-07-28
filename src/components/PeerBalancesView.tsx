@@ -54,7 +54,12 @@ export const PeerBalancesView: React.FC<PeerBalancesViewProps> = ({ theme, onUpd
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
+    // Show current local data first for fast load
+    setGroupedSummaries(PeerService.getGroupedSummaries());
+    
+    // Sync from Supabase in background
+    await PeerService.syncFromCloud();
     const data = PeerService.getGroupedSummaries();
     setGroupedSummaries(data);
     if (onUpdateMetrics) {

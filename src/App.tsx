@@ -61,6 +61,10 @@ export function App() {
     ExpenseService.syncFromCloud().then(cloudExpenses => {
       setExpenses(cloudExpenses);
     });
+
+    PeerService.syncFromCloud().then(() => {
+      setPendingPeersCount(PeerService.getPeerRecords().filter(r => r.status === 'pending').length);
+    });
   }, []);
 
   const handleUpdatePeerMetrics = () => {
