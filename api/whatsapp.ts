@@ -444,59 +444,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
             const audioBuffer = Buffer.from(audioRes.data);
 
-            let transcriptionText = '';
-            try {
-              // Try OmniRoute Audio Transcription endpoint first
-              const formData = new FormData();
-              const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
-              formData.append('file', audioBlob, 'voice.ogg');
-              formData.append('model', 'whisper-1');
+            // Streamlined 1-pass fast multimodal voice note transcription
+            const audioBase64 = audioBuffer.toString('base64');
+            const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
+              model: 'auto',
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
+                    },
+                    {
+                      type: 'image_url',
+                      url: `data:audio/ogg;base64,${audioBase64}`
+                    }
+                  ]
+                }
+              ]
+            }, {
+              headers: { Authorization: `Bearer ${omnirouteKey}` },
+              timeout: 10000
+            });
 
-              const transRes = await fetch(`${omnirouteUrl}/audio/transcriptions`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${omnirouteKey}` },
-                body: formData
-              });
-
-              if (transRes.ok) {
-                const transData: any = await transRes.json();
-                transcriptionText = transData.text || transData.transcript || '';
-              } else {
-                const errText = await transRes.text();
-                throw new Error(errText);
-              }
-            } catch (whisperErr: any) {
-              console.log('Whisper endpoint unconfigured/failed, using OmniRoute multimodal audio fallback...', whisperErr?.message || whisperErr);
-              // Fallback: Use free multimodal audio completion via OmniRoute!
-              const audioBase64 = audioBuffer.toString('base64');
-              const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
-                model: 'auto',
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'text',
-                        text: 'Transcribe the spoken words in this voice note accurately into text. Reply with ONLY the transcribed text, no conversational intro.'
-                      },
-                      {
-                        type: 'input_audio',
-                        input_audio: {
-                          data: audioBase64,
-                          format: 'ogg'
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }, {
-                headers: { Authorization: `Bearer ${omnirouteKey}` },
-                timeout: 45000
-              });
-
-              transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
-            }
-
+            const transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
             console.log(`Voice note transcribed: "${transcriptionText}"`);
             
             // Rewrite message as text so it flows into the text processing engine!
@@ -504,7 +476,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             msg.text = { body: transcriptionText };
           } catch (audioErr: any) {
             console.error('Audio Transcription Error:', audioErr);
-            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.message}`;
+            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.response?.data?.error?.message || audioErr.message}`;
           }
         }
 
