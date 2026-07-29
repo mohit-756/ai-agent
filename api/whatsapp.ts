@@ -465,7 +465,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ]
             }, {
               headers: { Authorization: `Bearer ${omnirouteKey}` },
-              timeout: 10000
+              timeout: 25000
             });
 
             const transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
