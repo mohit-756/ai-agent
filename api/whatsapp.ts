@@ -447,7 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // Streamlined 1-pass fast multimodal voice note transcription
             const audioBase64 = audioBuffer.toString('base64');
             const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
-              model: 'auto',
+              model: 'auto/best-vision',
               messages: [
                 {
                   role: 'user',
@@ -538,7 +538,7 @@ Return ONLY a clean JSON object without markdown fences:
             const ocrResponse = await axios.post(
               `${omnirouteUrl}/chat/completions`,
               {
-                model: 'auto',
+                model: 'auto/best-vision',
                 messages: [
                   {
                     role: 'user',
