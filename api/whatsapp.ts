@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 
 // Initialize Supabase Client for Serverless Backend
@@ -8,9 +7,9 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Initialize Google Gemini API
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
-const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+// Initialize OmniRoute Settings
+const omnirouteUrl = process.env.OMNIROUTE_URL || 'http://localhost:20128/v1';
+const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
 
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
@@ -423,56 +422,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const msg = messageVal.messages[0];
         fromNumber = msg.from; // User's WhatsApp Number
         
-        let parsed = {
-          amount: null as number | null,
-          category: 'Others',
-          description: '',
-          merchant: '',
-          paymentMethod: 'UPI',
-          date: new Date().toISOString().split('T')[0]
-        };
-        let isPeerRecord = false;
-        let peerRecordData = {
-          peerName: '',
-          type: 'lent' as 'lent' | 'borrowed',
-          amount: 0,
-          description: '',
-          date: '',
-          dueDate: undefined as string | undefined
-        };
-        let isPayback = false;
-        let paybackData = {
-          peerName: '',
-          amount: null as number | null
-        };
+        let replyBody = '';
         let receiptUrl: string | undefined = undefined;
-        let isImage = false;
 
-        // Process image messages
-        if (msg.type === 'image' && msg.image) {
-          isImage = true;
-          const mediaId = msg.image.id;
-
+        // Process audio messages & voice notes
+        const audioObj = msg.audio || msg.voice;
+        if ((msg.type === 'audio' || msg.type === 'voice') && audioObj) {
+          const mediaId = audioObj.id;
           try {
-            if (!genAI) throw new Error('GEMINI_API_KEY environment variable is not set on Vercel.');
-            if (!supabase) throw new Error('Supabase client is not initialized. Please verify SUPABASE_URL and SUPABASE_KEY.');
-
-            console.log(`Downloading image media: ${mediaId}`);
-            
-            // Step A: Get WhatsApp Media download link
+            console.log(`Processing voice note audio: ${mediaId}`);
+            // Get Meta download URL
             const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
               headers: { Authorization: `Bearer ${whatsappToken}` }
             });
-            const mediaUrl = mediaRes.data.url;
+            
+            // Download audio buffer
+            const audioRes = await axios.get(mediaRes.data.url, {
+              headers: { Authorization: `Bearer ${whatsappToken}` },
+              responseType: 'arraybuffer'
+            });
+            const audioBuffer = Buffer.from(audioRes.data);
 
-            // Step B: Download the image binary buffer
-            const imageRes = await axios.get(mediaUrl, {
+            // Send to OmniRoute Audio Transcription API using native FormData (Node 20+)
+            const formData = new FormData();
+            const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
+            formData.append('file', audioBlob, 'voice.ogg');
+            formData.append('model', 'whisper-1');
+
+            const transRes = await axios.post(`${omnirouteUrl}/audio/transcriptions`, formData, {
+              headers: {
+                Authorization: `Bearer ${omnirouteKey}`
+              }
+            });
+
+            const transcriptionText = transRes.data.text || '';
+            console.log(`Voice note transcribed: "${transcriptionText}"`);
+            
+            // Rewrite message as text so it flows into the text processing engine!
+            msg.type = 'text';
+            msg.text = { body: transcriptionText };
+          } catch (audioErr: any) {
+            console.error('Audio Transcription Error:', audioErr);
+            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.message}`;
+          }
+        }
+
+        // Process image messages (Receipt OCR)
+        if (msg.type === 'image' && msg.image) {
+          const mediaId = msg.image.id;
+          try {
+            if (!supabase) throw new Error('Supabase client is not initialized. Please verify SUPABASE_URL and SUPABASE_KEY.');
+
+            console.log(`Downloading receipt image: ${mediaId}`);
+            
+            // Get Meta download URL
+            const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
+              headers: { Authorization: `Bearer ${whatsappToken}` }
+            });
+
+            // Download image binary
+            const imageRes = await axios.get(mediaRes.data.url, {
               headers: { Authorization: `Bearer ${whatsappToken}` },
               responseType: 'arraybuffer'
             });
             const buffer = Buffer.from(imageRes.data);
 
-            // Step C: Upload to Supabase Storage Bucket ('receipts')
+            // Upload to Supabase Storage receipts bucket
             const storageFilename = `${Date.now()}_receipt.jpg`;
             const { error: uploadError } = await supabase.storage
               .from('receipts')
@@ -490,14 +505,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               receiptUrl = linkData.publicUrl;
             }
 
-            // Step D: Send base64 to Gemini for OCR extraction using a robust model fallback loop
-            const modelsToTry = [
-              'gemini-3.5-flash',
-              'gemini-3.6-flash',
-              'gemini-3.5-flash-lite',
-              'gemini-2.5-flash'
-            ];
-
+            // Call OmniRoute with Multimodal image parse request
             const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
 1. Total amount paid (number only)
 2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
@@ -505,7 +513,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 4. Description (A short brief memo of the spend)
 5. Payment Method (Choose one of: UPI, Credit Card, Debit Card, Cash, Net Banking)
 
-Return ONLY a clean JSON object without markdown fences, matching exactly this format:
+Return ONLY a clean JSON object without markdown fences:
 {
   "amount": 450,
   "merchant": "Swiggy",
@@ -514,41 +522,38 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
   "paymentMethod": "UPI"
 }`;
 
-            let geminiResult = null;
-            let lastModelErr = null;
-
-            for (const modelName of modelsToTry) {
-              try {
-                console.log(`Attempting Gemini OCR with model: ${modelName}`);
-                const model = genAI.getGenerativeModel({ model: modelName });
-                geminiResult = await model.generateContent([
-                  prompt,
+            const ocrResponse = await axios.post(
+              `${omnirouteUrl}/chat/completions`,
+              {
+                model: 'auto',
+                messages: [
                   {
-                    inlineData: {
-                      data: buffer.toString('base64'),
-                      mimeType: 'image/jpeg'
-                    }
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: prompt },
+                      {
+                        type: 'image_url',
+                        image_url: { url: `data:image/jpeg;base64,${buffer.toString('base64')}` }
+                      }
+                    ]
                   }
-                ]);
-                console.log(`Successfully generated content using model: ${modelName}`);
-                break;
-              } catch (err: any) {
-                console.warn(`Model ${modelName} failed: ${err.message}`);
-                lastModelErr = err;
+                ],
+                response_format: { type: 'json_object' }
+              },
+              {
+                headers: {
+                  Authorization: `Bearer ${omnirouteKey}`,
+                  'Content-Type': 'application/json'
+                }
               }
-            }
+            );
 
-            if (!geminiResult) {
-              throw new Error(`All Gemini models failed. Last error: ${lastModelErr?.message}`);
-            }
-
-            const responseText = geminiResult.response.text().trim();
-            console.log(`Gemini raw extraction result: ${responseText}`);
-            
-            // Remove markdown code block surrounds if present
+            const responseText = ocrResponse.data.choices[0].message.content.trim();
+            console.log(`OmniRoute OCR output: ${responseText}`);
             const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
             const extracted = JSON.parse(cleanJson);
-            parsed = {
+
+            const parsed = {
               amount: parseFloat(extracted.amount) || null,
               category: CATEGORIES.includes(extracted.category) ? extracted.category : 'Others',
               description: extracted.description || 'Receipt Image Log',
@@ -557,258 +562,370 @@ Return ONLY a clean JSON object without markdown fences, matching exactly this f
               date: new Date().toISOString().split('T')[0]
             };
 
-          } catch (ocrErr: any) {
-            console.error('OCR Processing Error:', ocrErr);
-            // Send the error message directly back to the user so they can diagnose it!
-            if (whatsappToken && phoneId) {
-              await axios.post(
-                `https://graph.facebook.com/v25.0/${phoneId}/messages`,
-                {
-                  messaging_product: 'whatsapp',
-                  recipient_type: 'individual',
-                  to: fromNumber,
-                  type: 'text',
-                  text: { body: `⚠️ *Image Parse Error:* ${ocrErr.message}\n\nMake sure your Gemini API key is generated from Google AI Studio, and your Supabase 'receipts' storage bucket exists.` }
-                },
-                {
-                  headers: {
-                    Authorization: `Bearer ${whatsappToken}`,
-                    'Content-Type': 'application/json'
-                  }
-                }
-              );
-            }
-            return res.status(200).json({ error: ocrErr.message });
-          }
-        } else {
-          // Process standard text messages
-          const msgText = msg.text?.body || '';
-          
-          // Check for Payback pattern
-          const paybackParsed = parseTextPayback(msgText);
-          if (paybackParsed.isPayback) {
-            isPayback = true;
-            paybackData = paybackParsed;
-          } else {
-            const peerParsed = parseTextPeerRecord(msgText);
-            if (peerParsed.isPeerRecord && peerParsed.amount) {
-              isPeerRecord = true;
-              peerRecordData = {
-                peerName: peerParsed.peerName || 'Friend',
-                type: peerParsed.type || 'lent',
-                amount: peerParsed.amount,
-                description: peerParsed.description || 'Peer Split',
-                date: peerParsed.date || new Date().toISOString().split('T')[0],
-                dueDate: peerParsed.dueDate
-              };
-            } else {
-              parsed = parseTextExpense(msgText);
-            }
-          }
-        }
-
-        let replyBody = '';
-
-        if (isPayback && supabase) {
-          if (paybackData.peerName) {
-            const { data: peerMatches } = await supabase
-              .from('peer_records')
-              .select('*')
-              .ilike('name', `%${paybackData.peerName}%`)
-              .eq('status', 'pending')
-              .order('created_at', { ascending: false });
-
-            if (peerMatches && peerMatches.length > 0) {
-              const targetRecord = peerMatches[0];
-              const paidAmount = paybackData.amount || Number(targetRecord.amount);
-              const newOutstanding = Math.max(0, Number(targetRecord.amount) - paidAmount);
-              const newStatus = newOutstanding === 0 ? 'settled' : 'pending';
-
-              const { error: updateErr } = await supabase
-                .from('peer_records')
-                .update({ amount: newOutstanding, status: newStatus })
-                .eq('id', targetRecord.id);
-
-              if (updateErr) {
-                replyBody = `⚠️ Error updating payback record: ${updateErr.message}`;
-              } else {
-                replyBody = `🤝 *Payback Logged & Synced!*\n\n` +
-                  `• *Person:* ${targetRecord.name}\n` +
-                  `• *Amount Received:* ₹${paidAmount}\n` +
-                  `• *Remaining Outstanding:* ₹${newOutstanding}\n` +
-                  `• *Status:* ${newStatus === 'settled' ? 'Fully Settled ✅' : 'Pending ⏳'}\n\n` +
-                  `Synced directly with your SpendWise Peer Ledger!`;
-              }
-            } else {
-              replyBody = `⚠️ Couldn't find an active pending record for "*${paybackData.peerName}*".\nCheck your Peer Ledger on the SpendWise dashboard!`;
-            }
-          } else {
-            replyBody = `⚠️ Could not identify the peer name for payback. Please specify like: _"Dileep paid back 1000"_.`;
-          }
-        } else if (isPeerRecord && peerRecordData.amount) {
-          if (supabase) {
-            const { error } = await supabase.from('peer_records').insert([{
-              name: peerRecordData.peerName,
-              amount: peerRecordData.amount,
-              original_amount: peerRecordData.amount,
-              type: peerRecordData.type,
-              description: peerRecordData.description,
-              date: peerRecordData.date,
-              due_date: peerRecordData.dueDate || null,
-              status: 'pending'
-            }]);
-
-            if (error) {
-              console.warn('peer_records write error, fallback to expenses table:', error.message);
-              // Fallback to inserting as a standard expense labeled as 'Others'
-              const { error: expError } = await supabase.from('expenses').insert([{
-                amount: peerRecordData.amount,
-                category: 'Others',
-                description: `${peerRecordData.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${peerRecordData.peerName}: ${peerRecordData.description}`,
-                paymentmethod: 'UPI',
-                date: peerRecordData.date,
+            if (parsed.amount) {
+              const { error: dbError } = await supabase.from('expenses').insert([{
+                amount: parsed.amount,
+                category: parsed.category,
+                description: parsed.description,
+                merchant: parsed.merchant,
+                paymentmethod: parsed.paymentMethod,
+                date: parsed.date,
+                notes: 'Receipt image scanned via OmniRoute OCR',
                 source: 'whatsapp',
-                notes: `Logged as expense fallback (peer_records table write failed)`
+                receipt_url: receiptUrl || null
               }]);
 
-              if (expError) {
-                replyBody = `⚠️ Error saving peer record: ${expError.message}`;
+              if (dbError) {
+                replyBody = `⚠️ Error saving expense: ${dbError.message}`;
               } else {
-                replyBody = `👥 *Logged to Expenses (Fallback)*\n\n` +
-                  `• *Detail:* ${peerRecordData.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${peerRecordData.peerName}\n` +
-                  `• *Amount:* ₹${peerRecordData.amount}\n` +
-                  `• *Desc:* ${peerRecordData.description}\n\n` +
-                  `*Note:* To save this specifically as a Peer Ledger entry, please create a \`peer_records\` table in your Supabase database.`;
-              }
-            } else {
-              replyBody = `👥 *Peer Ledger Record Added!*\n\n` +
-                `• *Person:* ${peerRecordData.peerName}\n` +
-                `• *Type:* ${peerRecordData.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
-                `• *Amount:* ₹${peerRecordData.amount}\n` +
-                `• *Description:* ${peerRecordData.description}\n` +
-                `• *Date Taken:* ${peerRecordData.date}\n` +
-                (peerRecordData.dueDate ? `⏰ *Due Date:* ${peerRecordData.dueDate}\n` : '') +
-                `\nSynced with your SpendWise database!`;
-            }
-          } else {
-            replyBody = `👥 *Parsed Peer Record!*\n\n• *Person:* ${peerRecordData.peerName}\n• *Type:* ${peerRecordData.type === 'lent' ? 'Lent' : 'Borrowed'}\n• *Amount:* ₹${peerRecordData.amount}\n• *Desc:* ${peerRecordData.description}\n\n*Note:* Connect your Supabase database in Vercel settings to save permanently.`;
-          }
-        } else if (parsed.amount) {
-          if (supabase) {
-            const { error } = await supabase.from('expenses').insert([{
-              amount: parsed.amount,
-              category: parsed.category,
-              description: parsed.description,
-              merchant: parsed.merchant,
-              paymentmethod: parsed.paymentMethod,
-              date: parsed.date,
-              notes: isImage ? `Receipt image parsed via Gemini AI` : `WhatsApp text entry`,
-              source: 'whatsapp',
-              receipt_url: receiptUrl || null
-            }]);
+                replyBody = `📸 *Receipt Scanned Successfully (via OmniRoute)!*\n\n` +
+                  `• *Amount:* ₹${parsed.amount}\n` +
+                  `• *Merchant:* ${parsed.merchant || 'N/A'}\n` +
+                  `• *Category:* ${parsed.category}\n` +
+                  `• *Payment:* ${parsed.paymentMethod}\n\n` +
+                  `Synced with SpendWise Dashboard!`;
 
-            if (error) {
-              console.error('Supabase write error:', error);
-              replyBody = `⚠️ Error saving expense: ${error.message}`;
-            } else {
-              replyBody = `${isImage ? '📸 *Receipt Scanned Successfully!*' : '✅ *Recorded Expense!*'}\n\n` +
-                `• *Amount:* ₹${parsed.amount}\n` +
-                `• *Merchant:* ${parsed.merchant || 'N/A'}\n` +
-                `• *Category:* ${parsed.category}\n` +
-                `• *Payment:* ${parsed.paymentMethod}\n\n` +
-                `Synced instantly with your SpendWise Dashboard!`;
-
-              // Check category budget threshold warnings
-              try {
-                const DEFAULT_BUDGETS: Record<string, number> = {
-                  'Food & Dining': 5000,
-                  'Transportation': 3000,
-                  'Shopping & Retail': 5000,
-                  'Bills & Utilities': 5000,
-                  'Entertainment': 2000,
-                  'Health & Wellness': 3000,
-                  'Travel': 10000,
-                  'Education': 5000,
-                  'Services': 3000,
-                  'Others': 3000
-                };
-                const now = new Date();
-                const firstDayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-                const { data: monthExps } = await supabase
-                  .from('expenses')
-                  .select('amount')
-                  .eq('category', parsed.category)
-                  .gte('date', firstDayStr);
-
-                const catSum = monthExps ? monthExps.reduce((acc, e) => acc + Number(e.amount), 0) : parsed.amount;
-                const cap = DEFAULT_BUDGETS[parsed.category] || 5000;
-                const pct = Math.round((catSum / cap) * 100);
-
-                if (pct >= 80) {
-                  replyBody += `\n\n⚠️ *Budget Alert:* You've spent ₹${catSum.toLocaleString('en-IN')} of your ₹${cap.toLocaleString('en-IN')} ${parsed.category} limit this month (${pct}%)!`;
-                }
-              } catch (bErr) {
-                console.warn('Budget threshold check failed:', bErr);
-              }
-            }
-          } else {
-            replyBody = `✅ *Parsed Expense Details!*\n\n• *Amount:* ₹${parsed.amount}\n• *Merchant:* ${parsed.merchant || 'N/A'}\n• *Category:* ${parsed.category}\n• *Payment:* ${parsed.paymentMethod}\n\n*Note:* Connect your Supabase database in Vercel settings to save this transaction permanently.`;
-          }
-        } else if (!isImage && msg.text?.body) {
-          // 2-Way Conversational Assistant for Q&A financial queries
-          if (supabase && genAI) {
-            try {
-              const { data: peers } = await supabase.from('peer_records').select('*').eq('status', 'pending');
-              const { data: recentExps } = await supabase.from('expenses').select('*').order('date', { ascending: false }).limit(15);
-
-              const lentTotal = peers ? peers.filter(p => p.type === 'lent').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
-              const borrowedTotal = peers ? peers.filter(p => p.type === 'borrowed').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
-
-              const peerSummary = peers && peers.length > 0
-                ? peers.map(p => `- ${p.name}: ${p.type === 'lent' ? 'owes you' : 'you owe'} ₹${p.amount} for "${p.description}" (Due: ${p.due_date || 'No deadline'})`).join('\n')
-                : 'No active peer debts.';
-
-              const expSummary = recentExps && recentExps.length > 0
-                ? recentExps.map(e => `- ₹${e.amount} on ${e.category} (${e.description || e.merchant || 'Expense'}) on ${e.date}`).join('\n')
-                : 'No recent expenses.';
-
-              const prompt = `You are SpendWise AI Assistant on WhatsApp. Answer the user's financial question concisely and helpfully using their current financial data context. Use bullet points and WhatsApp bold (*text*) formatting. Keep your response under 150 words.
-
-Current Financial Context:
-- Net Peer Ledger: You are owed ₹${lentTotal}, You owe ₹${borrowedTotal}.
-- Active Pending Peer Records:
-${peerSummary}
-
-- Recent Expense Logs (Last 15):
-${expSummary}
-
-User's Question: "${msg.text.body}"`;
-
-              let aiAnswer = null;
-              const modelsToTry = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
-              for (const m of modelsToTry) {
+                // Budget Alert Check
                 try {
-                  const model = genAI.getGenerativeModel({ model: m });
-                  const res = await model.generateContent(prompt);
-                  aiAnswer = res.response.text().trim();
-                  break;
-                } catch (err) {}
-              }
+                  const DEFAULT_BUDGETS: Record<string, number> = {
+                    'Food & Dining': 5000, 'Transportation': 3000, 'Shopping & Retail': 5000,
+                    'Bills & Utilities': 5000, 'Entertainment': 2000, 'Health & Wellness': 3000,
+                    'Travel': 10000, 'Education': 5000, 'Services': 3000, 'Others': 3000
+                  };
+                  const firstDayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
+                  const { data: monthExps } = await supabase
+                    .from('expenses')
+                    .select('amount')
+                    .eq('category', parsed.category)
+                    .gte('date', firstDayStr);
 
-              if (aiAnswer) {
-                replyBody = aiAnswer;
-              } else {
-                replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr ask questions:\n_"Who owes me money?"_`;
+                  const catSum = monthExps ? monthExps.reduce((acc, e) => acc + Number(e.amount), 0) : parsed.amount;
+                  const cap = DEFAULT_BUDGETS[parsed.category] || 5000;
+                  const pct = Math.round((catSum / cap) * 100);
+
+                  if (pct >= 80) {
+                    replyBody += `\n\n⚠️ *Budget Alert:* You've spent ₹${catSum.toLocaleString('en-IN')} of your ₹${cap.toLocaleString('en-IN')} ${parsed.category} limit this month (${pct}%)!`;
+                  }
+                } catch (bErr) {
+                  console.warn('Budget warning check failed:', bErr);
+                }
               }
-            } catch (qErr) {
-              replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr ask questions:\n_"Who owes me money?"_`;
+            } else {
+              replyBody = `⚠️ Could not extract valid amount from this receipt scan.`;
             }
-          } else {
-            replyBody = `👋 *SpendWise Financial Agent*\n\nSend a text like:\n_"Spent ₹350 on Swiggy lunch"_\n\nOr track loans:\n_"Lent ₹500 to Rohit for dinner split"_\n\nOr paybacks:\n_"Dileep paid back 1000"_\n\nOr **send a photo of any receipt/bill** to scan it automatically!`;
+
+          } catch (ocrErr: any) {
+            console.error('OCR Error:', ocrErr);
+            replyBody = `⚠️ *OCR Parsing failed:* ${ocrErr.message}`;
           }
         }
 
-        // Send Reply via Meta Cloud API for successful text parses or successful image parses
+        // Process text messages (transcribed or direct)
+        else if (msg.text?.body) {
+          const msgText = msg.text.body.trim();
+          const urlRegex = /(https?:\/\/[^\s]+)/gi;
+          const urlMatch = msgText.match(urlRegex);
+
+          // Scenario A: Link Scraping & Memory Archive
+          if (urlMatch) {
+            const url = urlMatch[0];
+            try {
+              if (!supabase) throw new Error('Supabase client is not initialized.');
+              console.log(`Scraping URL: ${url}`);
+              
+              // Fetch page content
+              const htmlRes = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+              const content = htmlRes.data.toString()
+                .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+                .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 6000); // safety length limit
+
+              // Generate summary using OmniRoute
+              const summaryResponse = await axios.post(
+                `${omnirouteUrl}/chat/completions`,
+                {
+                  model: 'auto',
+                  messages: [
+                    { role: 'user', content: `Summarize the core takeaways of this page content in 3-4 bullet points:\n\n${content}` }
+                  ]
+                },
+                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+              );
+              const summary = summaryResponse.data.choices[0].message.content;
+
+              // Generate vector embedding
+              const embResponse = await axios.post(
+                `${omnirouteUrl}/embeddings`,
+                {
+                  model: 'text-embedding-3-small',
+                  input: summary
+                },
+                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+              );
+              const embedding = embResponse.data.data[0].embedding;
+
+              // Save to memories table
+              const { error: memErr } = await supabase.from('memories').insert([{
+                content: `Link Summary for: ${url}\n\n${summary}`,
+                embedding,
+                metadata: { source: 'whatsapp_link', url }
+              }]);
+
+              if (memErr) throw memErr;
+
+              replyBody = `🔗 *Link Summarized & Saved to Second Brain!*\n\n${summary}`;
+            } catch (linkErr: any) {
+              console.error('Link scraping error:', linkErr);
+              replyBody = `⚠️ *Link archiving failed:* ${linkErr.message}`;
+            }
+          }
+
+          // Scenario B: LLM-based Intent Detection & Conversation Parser
+          else {
+            try {
+              if (!supabase) throw new Error('Supabase client is not initialized.');
+
+              const systemPrompt = `You are the parsing brain of SpendWise, an AI personal finance and memory system.
+Analyze the user's message and determine the correct intent. Respond ONLY with a clean JSON object. Do not include markdown fences.
+
+Intents:
+- "log_expense": spending money (e.g., "spent 350 on lunch", "zomato 250 paid upi")
+- "log_peer": lending or borrowing money (e.g., "lent 500 to Sneha for split", "borrowed 1000 from Rohit")
+- "log_payback": settling debts (e.g., "Sneha paid back 500", "repaid 1000 to Rohit")
+- "query_database": questioning past transactions or semantic memory (e.g., "who owes me money?", "what was that link I sent yesterday?", "how much did I spend on cabs?")
+- "general_chat": general chatting or greetings
+
+Return Format:
+{
+  "intent": "log_expense" | "log_peer" | "log_payback" | "query_database" | "general_chat",
+  "data": {
+    // For log_expense:
+    "amount": number | null,
+    "merchant": string,
+    "category": "Food & Dining" | "Transportation" | "Shopping & Retail" | "Bills & Utilities" | "Entertainment" | "Health & Wellness" | "Travel" | "Education" | "Services" | "Others",
+    "description": string,
+    "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking"
+
+    // For log_peer:
+    "peerName": string,
+    "amount": number | null,
+    "type": "lent" | "borrowed",
+    "description": string,
+    "dueDate": "YYYY-MM-DD" | null
+
+    // For log_payback:
+    "peerName": string,
+    "amount": number | null
+  }
+}`;
+
+              const intentResponse = await axios.post(
+                `${omnirouteUrl}/chat/completions`,
+                {
+                  model: 'auto',
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: msgText }
+                  ],
+                  response_format: { type: 'json_object' }
+                },
+                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+              );
+
+              const responseText = intentResponse.data.choices[0].message.content.trim();
+              const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+              const parsedIntent = JSON.parse(cleanJson);
+              const intent = parsedIntent.intent;
+              const data = parsedIntent.data || {};
+
+              console.log(`Detected Intent: ${intent}`, data);
+
+              // 1. Log Expense
+              if (intent === 'log_expense' && data.amount) {
+                const { error } = await supabase.from('expenses').insert([{
+                  amount: data.amount,
+                  category: data.category || 'Others',
+                  description: data.description || 'WhatsApp Expense',
+                  merchant: data.merchant || '',
+                  paymentmethod: data.paymentMethod || 'UPI',
+                  date: new Date().toISOString().split('T')[0],
+                  notes: `Processed via OmniRoute text parser: "${msgText}"`,
+                  source: 'whatsapp'
+                }]);
+
+                if (error) throw error;
+                replyBody = `✅ *Recorded Expense!*\n\n` +
+                  `• *Amount:* ₹${data.amount}\n` +
+                  `• *Merchant:* ${data.merchant || 'N/A'}\n` +
+                  `• *Category:* ${data.category || 'Others'}\n` +
+                  `• *Payment:* ${data.paymentMethod || 'UPI'}\n\n` +
+                  `Synced with SpendWise!`;
+              }
+
+              // 2. Log Peer Ledger Record
+              else if (intent === 'log_peer' && data.amount) {
+                const { error } = await supabase.from('peer_records').insert([{
+                  name: data.peerName || 'Friend',
+                  amount: data.amount,
+                  original_amount: data.amount,
+                  type: data.type || 'lent',
+                  description: data.description || 'Peer Split',
+                  date: new Date().toISOString().split('T')[0],
+                  due_date: data.dueDate || null,
+                  status: 'pending'
+                }]);
+
+                if (error) {
+                  // Fallback to standard expense insert
+                  console.warn('peer_records insert failed, falling back to expenses:', error.message);
+                  await supabase.from('expenses').insert([{
+                    amount: data.amount,
+                    category: 'Others',
+                    description: `${data.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${data.peerName}: ${data.description}`,
+                    paymentmethod: 'UPI',
+                    date: new Date().toISOString().split('T')[0],
+                    source: 'whatsapp',
+                    notes: `Logged as fallback (peer_records write failed)`
+                  }]);
+
+                  replyBody = `👥 *Logged to Expenses (Fallback)*\n\n• *Detail:* ${data.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${data.peerName}\n• *Amount:* ₹${data.amount}\n• *Desc:* ${data.description}`;
+                } else {
+                  replyBody = `👥 *Peer Ledger Record Added!*\n\n` +
+                    `• *Person:* ${data.peerName}\n` +
+                    `• *Type:* ${data.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
+                    `• *Amount:* ₹${data.amount}\n` +
+                    `• *Description:* ${data.description || 'Peer split'}\n` +
+                    (data.dueDate ? `⏰ *Due Date:* ${data.dueDate}\n` : '') +
+                    `\nSynced with SpendWise!`;
+                }
+              }
+
+              // 3. Log Payback
+              else if (intent === 'log_payback') {
+                if (data.peerName) {
+                  const { data: peerMatches } = await supabase
+                    .from('peer_records')
+                    .select('*')
+                    .ilike('name', `%${data.peerName}%`)
+                    .eq('status', 'pending')
+                    .order('created_at', { ascending: false });
+
+                  if (peerMatches && peerMatches.length > 0) {
+                    const targetRecord = peerMatches[0];
+                    const paidAmount = data.amount || Number(targetRecord.amount);
+                    const newOutstanding = Math.max(0, Number(targetRecord.amount) - paidAmount);
+                    const newStatus = newOutstanding === 0 ? 'settled' : 'pending';
+
+                    const { error } = await supabase
+                      .from('peer_records')
+                      .update({ amount: newOutstanding, status: newStatus })
+                      .eq('id', targetRecord.id);
+
+                    if (error) throw error;
+
+                    replyBody = `🤝 *Payback Logged & Synced!*\n\n` +
+                      `• *Person:* ${targetRecord.name}\n` +
+                      `• *Amount Received:* ₹${paidAmount}\n` +
+                      `• *Remaining Outstanding:* ₹${newOutstanding}\n` +
+                      `• *Status:* ${newStatus === 'settled' ? 'Fully Settled ✅' : 'Pending ⏳'}\n\n` +
+                      `Updated in SpendWise Database!`;
+                  } else {
+                    replyBody = `⚠️ Couldn't find an active pending peer record for "*${data.peerName}*".`;
+                  }
+                } else {
+                  replyBody = `⚠️ Could not parse peer name for payback. Make sure to mention who paid back.`;
+                }
+              }
+
+              // 4. Query Database (Financial Context + Semantic Memory Search)
+              else if (intent === 'query_database' || intent === 'general_chat') {
+                let memoriesContextText = 'None';
+                
+                // Perform semantic vector memory search if query_database is triggered
+                if (intent === 'query_database') {
+                  try {
+                    // Generate search embedding
+                    const embResponse = await axios.post(
+                      `${omnirouteUrl}/embeddings`,
+                      {
+                        model: 'text-embedding-3-small',
+                        input: msgText
+                      },
+                      { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+                    );
+                    const qEmbedding = embResponse.data.data[0].embedding;
+
+                    // Search vector similarity in memories table
+                    const { data: matchedMemories } = await supabase.rpc('match_memories', {
+                      query_embedding: qEmbedding,
+                      match_threshold: 0.3,
+                      match_count: 4
+                    });
+
+                    if (matchedMemories && matchedMemories.length > 0) {
+                      memoriesContextText = matchedMemories.map((m: any) => `- [Score: ${m.similarity.toFixed(2)}] ${m.content}`).join('\n');
+                    }
+                  } catch (vErr) {
+                    console.warn('Vector memory search failed (make sure match_memories function is installed):', vErr);
+                  }
+                }
+
+                // Fetch ledger context
+                const { data: peers } = await supabase.from('peer_records').select('*').eq('status', 'pending');
+                const { data: recentExps } = await supabase.from('expenses').select('*').order('date', { ascending: false }).limit(10);
+
+                const lentTotal = peers ? peers.filter(p => p.type === 'lent').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
+                const borrowedTotal = peers ? peers.filter(p => p.type === 'borrowed').reduce((acc, p) => acc + Number(p.amount), 0) : 0;
+
+                const peerSummary = peers && peers.length > 0
+                  ? peers.map(p => `- ${p.name}: ${p.type === 'lent' ? 'owes you' : 'you owe'} ₹${p.amount} for "${p.description}"`).join('\n')
+                  : 'No active debts.';
+
+                const expSummary = recentExps && recentExps.length > 0
+                  ? recentExps.map(e => `- ₹${e.amount} on ${e.category} (${e.description || e.merchant || 'Expense'}) on ${e.date}`).join('\n')
+                  : 'No recent expenses.';
+
+                const conversationPrompt = `You are SpendWise AI Assistant, a personal finance and second brain agent.
+Answer the user's questions clearly, concisely, and helpfully using the provided financial context and memory summaries.
+Format output using bullet points and WhatsApp bold (*text*). Keep your response under 150 words.
+
+Active Peer Balances:
+- Owed to You: ₹${lentTotal}
+- You Owe: ₹${borrowedTotal}
+- Individual balances:
+${peerSummary}
+
+Recent Expenses (Last 10):
+${expSummary}
+
+Archived Second Brain Memories (similar findings):
+${memoriesContextText}
+
+User's Question: "${msgText}"`;
+
+                const chatResponse = await axios.post(
+                  `${omnirouteUrl}/chat/completions`,
+                  {
+                    model: 'auto',
+                    messages: [{ role: 'user', content: conversationPrompt }]
+                  },
+                  { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+                );
+
+                replyBody = chatResponse.data.choices[0].message.content.trim();
+              }
+
+            } catch (textErr: any) {
+              console.error('Text Processing Error:', textErr);
+              replyBody = `⚠️ *Failed to process message:* ${textErr.message}`;
+            }
+          }
+        }
+
+        // Send Reply back to user WhatsApp chat
         if (replyBody && whatsappToken && phoneId) {
           await axios.post(
             `https://graph.facebook.com/v25.0/${phoneId}/messages`,
@@ -828,7 +945,7 @@ User's Question: "${msg.text.body}"`;
           );
         }
 
-        return res.status(200).json({ success: true, parsed, receiptUrl });
+        return res.status(200).json({ success: true, receiptUrl });
       }
 
       return res.status(200).json({ status: 'Ignored webhook payload' });
