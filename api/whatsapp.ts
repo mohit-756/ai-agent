@@ -8,9 +8,10 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Initialize OmniRoute Settings
+// Initialize OmniRoute & Gemini Settings
 const omnirouteUrl = process.env.OMNIROUTE_URL || 'http://localhost:20128/v1';
 const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
 
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
@@ -444,31 +445,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
             const audioBuffer = Buffer.from(audioRes.data);
 
-            // Streamlined 1-pass fast multimodal voice note transcription
+            let transcriptionText = '';
             const audioBase64 = audioBuffer.toString('base64');
-            const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
-              model: 'auto/best-vision',
-              messages: [
+
+            if (geminiApiKey) {
+              console.log('Using direct free Gemini API for instant 0.5s voice note transcription...');
+              const gRes = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
                 {
-                  role: 'user',
-                  content: [
+                  contents: [
                     {
-                      type: 'text',
-                      text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
-                    },
-                    {
-                      type: 'image_url',
-                      url: `data:audio/ogg;base64,${audioBase64}`
+                      parts: [
+                        { text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
+                        {
+                          inlineData: {
+                            mimeType: 'audio/ogg',
+                            data: audioBase64
+                          }
+                        }
+                      ]
                     }
                   ]
-                }
-              ]
-            }, {
-              headers: { Authorization: `Bearer ${omnirouteKey}` },
-              timeout: 25000
-            });
+                },
+                { timeout: 15000 }
+              );
+              transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+            } else {
+              console.log('Using OmniRoute for voice note transcription...');
+              const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
+                model: 'auto',
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
+                      },
+                      {
+                        type: 'image_url',
+                        url: `data:audio/ogg;base64,${audioBase64}`
+                      }
+                    ]
+                  }
+                ]
+              }, {
+                headers: { Authorization: `Bearer ${omnirouteKey}` },
+                timeout: 25000
+              });
 
-            const transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
+              transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
+            }
             console.log(`Voice note transcribed: "${transcriptionText}"`);
             
             // Rewrite message as text so it flows into the text processing engine!
