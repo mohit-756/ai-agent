@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+export const maxDuration = 60;
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
@@ -479,14 +480,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         text: 'Transcribe the spoken words in this voice note accurately into text. Reply with ONLY the transcribed text, no conversational intro.'
                       },
                       {
-                        type: 'image_url',
-                        url: `data:audio/ogg;base64,${audioBase64}`
+                        type: 'input_audio',
+                        input_audio: {
+                          data: audioBase64,
+                          format: 'ogg'
+                        }
                       }
                     ]
                   }
                 ]
               }, {
-                headers: { Authorization: `Bearer ${omnirouteKey}` }
+                headers: { Authorization: `Bearer ${omnirouteKey}` },
+                timeout: 45000
               });
 
               transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
