@@ -443,19 +443,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
             const audioBuffer = Buffer.from(audioRes.data);
 
-            // Send to OmniRoute Audio Transcription API using native FormData (Node 20+)
+            // Send to OmniRoute Audio Transcription API using native fetch (robust multipart form handling)
             const formData = new FormData();
             const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
             formData.append('file', audioBlob, 'voice.ogg');
             formData.append('model', 'whisper-1');
 
-            const transRes = await axios.post(`${omnirouteUrl}/audio/transcriptions`, formData, {
+            const transRes = await fetch(`${omnirouteUrl}/audio/transcriptions`, {
+              method: 'POST',
               headers: {
-                Authorization: `Bearer ${omnirouteKey}`
-              }
+                'Authorization': `Bearer ${omnirouteKey}`
+              },
+              body: formData
             });
 
-            const transcriptionText = transRes.data.text || '';
+            if (!transRes.ok) {
+              const errText = await transRes.text();
+              throw new Error(`OmniRoute (${transRes.status}): ${errText}`);
+            }
+
+            const transData: any = await transRes.json();
+            const transcriptionText = transData.text || transData.transcript || '';
             console.log(`Voice note transcribed: "${transcriptionText}"`);
             
             // Rewrite message as text so it flows into the text processing engine!
