@@ -448,54 +448,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let transcriptionText = '';
             const audioBase64 = audioBuffer.toString('base64');
 
-            if (geminiApiKey) {
-              console.log('Using direct free Gemini API for instant 0.5s voice note transcription...');
-              const gRes = await axios.post(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-                {
-                  contents: [
+            // Multi-model audio transcription fallback list to prevent unhandled 401 / unsupported model errors
+            const audioModelsToTry = [
+              { type: 'gemini_direct', key: geminiApiKey },
+              { type: 'omniroute', model: 'gemini-2.0-flash' },
+              { type: 'omniroute', model: 'whisper-1' },
+              { type: 'omniroute', model: 'auto/best-vision' },
+              { type: 'omniroute', model: 'auto' }
+            ];
+
+            let lastAudioError: any = null;
+
+            for (const item of audioModelsToTry) {
+              if (item.type === 'gemini_direct') {
+                if (!item.key) continue;
+                try {
+                  console.log('Trying direct Gemini API for voice note transcription...');
+                  const gRes = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${item.key}`,
                     {
-                      parts: [
-                        { text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
+                      contents: [
                         {
-                          inlineData: {
-                            mimeType: 'audio/ogg',
-                            data: audioBase64
-                          }
+                          parts: [
+                            { text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
+                            {
+                              inlineData: {
+                                mimeType: 'audio/ogg',
+                                data: audioBase64
+                              }
+                            }
+                          ]
                         }
                       ]
-                    }
-                  ]
-                },
-                { timeout: 15000 }
-              );
-              transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-            } else {
-              console.log('Using OmniRoute for voice note transcription...');
-              const geminiRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
-                model: 'auto',
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
+                    },
+                    { timeout: 15000 }
+                  );
+                  transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+                  if (transcriptionText) break;
+                } catch (e: any) {
+                  console.warn('Gemini direct audio transcription failed, trying next provider:', e.message);
+                  lastAudioError = e;
+                }
+              } else if (item.type === 'omniroute') {
+                try {
+                  console.log(`Trying OmniRoute model "${item.model}" for voice note transcription...`);
+                  const omniRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
+                    model: item.model,
+                    messages: [
                       {
-                        type: 'text',
-                        text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
-                      },
-                      {
-                        type: 'image_url',
-                        url: `data:audio/ogg;base64,${audioBase64}`
+                        role: 'user',
+                        content: [
+                          {
+                            type: 'text',
+                            text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
+                          },
+                          {
+                            type: 'image_url',
+                            url: `data:audio/ogg;base64,${audioBase64}`
+                          }
+                        ]
                       }
                     ]
-                  }
-                ]
-              }, {
-                headers: { Authorization: `Bearer ${omnirouteKey}` },
-                timeout: 25000
-              });
+                  }, {
+                    headers: { Authorization: `Bearer ${omnirouteKey}` },
+                    timeout: 25000
+                  });
 
-              transcriptionText = geminiRes.data?.choices?.[0]?.message?.content?.trim() || '';
+                  transcriptionText = omniRes.data?.choices?.[0]?.message?.content?.trim() || '';
+                  if (transcriptionText) break;
+                } catch (e: any) {
+                  console.warn(`OmniRoute audio transcription model "${item.model}" failed:`, e.response?.data?.error?.message || e.message);
+                  lastAudioError = e;
+                }
+              }
             }
+
+            if (!transcriptionText && lastAudioError) {
+              throw lastAudioError;
+            }
+
             console.log(`Voice note transcribed: "${transcriptionText}"`);
             
             // Rewrite message as text so it flows into the text processing engine!
@@ -503,7 +534,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             msg.text = { body: transcriptionText };
           } catch (audioErr: any) {
             console.error('Audio Transcription Error:', audioErr);
-            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.response?.data?.error?.message || audioErr.message}`;
+            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.response?.data?.error?.message || audioErr.message || 'Service unavailable'}`;
           }
         }
 
@@ -728,37 +759,42 @@ Return ONLY a clean JSON object without markdown fences:
             try {
               if (!supabase) throw new Error('Supabase client is not initialized.');
 
-              const systemPrompt = `You are the parsing brain of SpendWise, an AI personal finance and memory system.
+              const systemPrompt = `You are the parsing brain of SpendWise, an AI personal finance and real-life memory system.
 Analyze the user's message and determine the correct intent. Respond ONLY with a clean JSON object. Do not include markdown fences.
 
 Intents:
 - "log_expense": spending money (e.g., "spent 350 on lunch", "zomato 250 paid upi")
 - "log_peer": lending or borrowing money (e.g., "lent 500 to Sneha for split", "borrowed 1000 from Rohit")
 - "log_payback": settling debts (e.g., "Sneha paid back 500", "repaid 1000 to Rohit")
+- "log_memory": saving a non-monetary real-life note, reminder, task, idea, or memo (e.g., "Doctor appointment on Friday at 5pm", "Buy groceries: milk, bread", "Idea: launch AI audio bot", "Met Alex for coffee today")
 - "query_database": questioning past transactions or semantic memory (e.g., "who owes me money?", "what was that link I sent yesterday?", "how much did I spend on cabs?")
 - "general_chat": general chatting or greetings
 
 Return Format:
 {
-  "intent": "log_expense" | "log_peer" | "log_payback" | "query_database" | "general_chat",
+  "intent": "log_expense" | "log_peer" | "log_payback" | "log_memory" | "query_database" | "general_chat",
   "data": {
     // For log_expense:
     "amount": number | null,
     "merchant": string,
     "category": "Food & Dining" | "Transportation" | "Shopping & Retail" | "Bills & Utilities" | "Entertainment" | "Health & Wellness" | "Travel" | "Education" | "Services" | "Others",
     "description": string,
-    "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking"
+    "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking",
 
     // For log_peer:
     "peerName": string,
     "amount": number | null,
     "type": "lent" | "borrowed",
     "description": string,
-    "dueDate": "YYYY-MM-DD" | null
+    "dueDate": "YYYY-MM-DD" | null,
 
     // For log_payback:
     "peerName": string,
-    "amount": number | null
+    "amount": number | null,
+
+    // For log_memory:
+    "content": string,
+    "category": "note" | "reminder" | "idea" | "task"
   }
 }`;
 
@@ -878,6 +914,28 @@ Return Format:
                 } else {
                   replyBody = `⚠️ Could not parse peer name for payback. Make sure to mention who paid back.`;
                 }
+              }
+
+              // 4. Log Real-Life Memory / Note / Reminder / Task / Idea
+              else if (intent === 'log_memory') {
+                const memoryContent = data.content || msgText;
+                const memoryCategory = (data.category || 'note').toUpperCase();
+
+                const { error: memErr } = await supabase.from('memories').insert([{
+                  content: `[${memoryCategory}] ${memoryContent}`,
+                  metadata: {
+                    source: 'whatsapp_voice_or_text',
+                    category: data.category || 'note',
+                    date: new Date().toISOString().split('T')[0]
+                  }
+                }]);
+
+                if (memErr) throw memErr;
+
+                replyBody = `📝 *Saved to Second Brain Notes!*\n\n` +
+                  `• *Category:* ${memoryCategory}\n` +
+                  `• *Note:* "${memoryContent}"\n\n` +
+                  `Stored safely in your SpendWise Second Brain!`;
               }
 
               // 4. Query Database (Financial Context + Semantic Memory Search)

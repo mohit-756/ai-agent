@@ -31,6 +31,44 @@ export function parseFlexibleDate(str: string): string {
 export class AIFinanceService {
 
   /**
+   * Natural Language Parser for Real-Life Notes, Tasks, Reminders & Ideas
+   */
+  public static parseNaturalLanguageMemory(text: string): {
+    isMemory: boolean;
+    category: 'note' | 'reminder' | 'idea' | 'task';
+    content: string;
+  } {
+    const trimmed = text.trim();
+    if (!trimmed) return { isMemory: false, category: 'note', content: '' };
+
+    const lower = trimmed.toLowerCase();
+
+    // Check for real-life keywords
+    const isReminder = /\b(remind|reminder|appointment|schedule|scheduled|due|meeting|alarm|doctor|call|dentist)\b/i.test(lower);
+    const isTask = /\b(buy|todo|task|groceries|shopping list|clean|fix|send|mail|finish|do)\b/i.test(lower) && !/\b(spent|paid|₹|rs|inr)\b/i.test(lower);
+    const isIdea = /\b(idea|thought|feature|project|concept|what if)\b/i.test(lower);
+    const isNote = /\b(note|memo|remember|journal|log|met|discussed)\b/i.test(lower);
+
+    // If it has monetary amount (e.g. ₹250 or spent 500), it's financial
+    const hasMoneyAmount = /(?:₹|rs\.?|inr)\s*\d+|\d+\s*(?:rs|rupees|inr|₹)/i.test(lower) || /\b(spent|paid|borrowed|lent)\b/i.test(lower);
+
+    if ((isReminder || isTask || isIdea || isNote) && !hasMoneyAmount) {
+      let category: 'note' | 'reminder' | 'idea' | 'task' = 'note';
+      if (isReminder) category = 'reminder';
+      else if (isTask) category = 'task';
+      else if (isIdea) category = 'idea';
+
+      return {
+        isMemory: true,
+        category,
+        content: trimmed
+      };
+    }
+
+    return { isMemory: false, category: 'note', content: trimmed };
+  }
+
+  /**
    * Natural Language Parser Engine
    * Converts queries like "Spent ₹250 on Swiggy lunch via UPI" into structured data.
    */

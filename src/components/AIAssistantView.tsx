@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, User, Sparkles, MessageSquare } from 'lucide-react';
+import { Bot, Send, User, Sparkles, MessageSquare, Mic, MicOff } from 'lucide-react';
 import type { ChatMessage, Expense, Budget } from '../types/expense';
 import { AIFinanceService } from '../services/aiFinanceService';
 import { WhatsAppHubView } from './WhatsAppHubView';
@@ -35,6 +35,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputQuery, setInputQuery] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -215,9 +216,47 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
               type="text"
               value={inputQuery}
               onChange={(e) => setInputQuery(e.target.value)}
-              placeholder="Ask about spending, budgets, or advice..."
-              className="flex-1 px-4 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-white placeholder-slate-600 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/40 shadow-inner"
+              placeholder={isListening ? "Listening to your voice..." : "Ask about spending, budgets, or advice..."}
+              className={`flex-1 px-4 py-3.5 rounded-2xl bg-slate-900 border text-white placeholder-slate-600 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500/40 shadow-inner transition ${
+                isListening ? 'border-red-500 ring-2 ring-red-500/20' : 'border-slate-800'
+              }`}
             />
+            <button
+              type="button"
+              onClick={() => {
+                const windowObj = window as any;
+                const SpeechRecognition = windowObj.SpeechRecognition || windowObj.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                  alert('Speech recognition is not supported in this browser.');
+                  return;
+                }
+                if (isListening) {
+                  setIsListening(false);
+                  return;
+                }
+                try {
+                  const rec = new SpeechRecognition();
+                  rec.continuous = false;
+                  rec.interimResults = true;
+                  rec.lang = 'en-US';
+                  rec.onstart = () => setIsListening(true);
+                  rec.onend = () => setIsListening(false);
+                  rec.onresult = (evt: any) => {
+                    const txt = Array.from(evt.results).map((r: any) => r[0].transcript).join('');
+                    setInputQuery(txt);
+                  };
+                  rec.start();
+                } catch {
+                  setIsListening(false);
+                }
+              }}
+              title={isListening ? "Stop listening" : "Voice dictation"}
+              className={`p-3.5 rounded-2xl font-bold text-xs transition cursor-pointer ${
+                isListening ? 'bg-red-600 text-white animate-pulse shadow-md shadow-red-600/30' : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800'
+              }`}
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-indigo-400" />}
+            </button>
             <button
               type="submit"
               disabled={!inputQuery.trim()}

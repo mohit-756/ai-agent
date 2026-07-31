@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, Check, Tag, CreditCard, Calendar, IndianRupee } from 'lucide-react';
+import { Sparkles, ArrowRight, Check, Tag, CreditCard, Calendar, IndianRupee, Mic, MicOff, BookOpen } from 'lucide-react';
 import { AIFinanceService } from '../services/aiFinanceService';
+import { MemoryService } from '../services/memoryService';
 import type { Expense } from '../types/expense';
 
 interface QuickAddBarProps {
@@ -10,29 +11,92 @@ interface QuickAddBarProps {
 export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
   const [inputText, setInputText] = useState('');
   const [parsedResult, setParsedResult] = useState(() => AIFinanceService.parseNaturalLanguageExpense(''));
+  const [memoryResult, setMemoryResult] = useState(() => AIFinanceService.parseNaturalLanguageMemory(''));
   const [isSuccess, setIsSuccess] = useState(false);
+  const [memorySuccessMsg, setMemorySuccessMsg] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
-    const result = AIFinanceService.parseNaturalLanguageExpense(inputText);
-    setParsedResult(result);
+    const expResult = AIFinanceService.parseNaturalLanguageExpense(inputText);
+    const memResult = AIFinanceService.parseNaturalLanguageMemory(inputText);
+    setParsedResult(expResult);
+    setMemoryResult(memResult);
   }, [inputText]);
+
+  const toggleVoiceRecording = () => {
+    const windowObj = window as any;
+    const SpeechRecognition = windowObj.SpeechRecognition || windowObj.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported by your browser. Please try Google Chrome or MS Edge.');
+      return;
+    }
+
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = (err: any) => {
+        console.error('Speech recognition error:', err);
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((res: any) => res[0].transcript)
+          .join('');
+        setInputText(transcript);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error('Speech recognition error:', err);
+      setIsListening(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!parsedResult.amount || parsedResult.amount <= 0) return;
 
-    onAddExpense({
-      amount: parsedResult.amount,
-      category: parsedResult.category,
-      description: parsedResult.description || 'Natural Language Input',
-      merchant: parsedResult.merchant,
-      paymentMethod: parsedResult.paymentMethod,
-      date: parsedResult.date
-    });
+    // 1. Expense Input
+    if (parsedResult.amount && parsedResult.amount > 0) {
+      onAddExpense({
+        amount: parsedResult.amount,
+        category: parsedResult.category,
+        description: parsedResult.description || 'Voice / Natural Language Input',
+        merchant: parsedResult.merchant,
+        paymentMethod: parsedResult.paymentMethod,
+        date: parsedResult.date
+      });
 
-    setInputText('');
-    setIsSuccess(true);
-    setTimeout(() => setIsSuccess(false), 2000);
+      setInputText('');
+      setIsSuccess(true);
+      setTimeout(() => setIsSuccess(false), 2000);
+      return;
+    }
+
+    // 2. Real-Life Note / Reminder / Task / Idea Input
+    if (memoryResult.isMemory && memoryResult.content.trim()) {
+      MemoryService.addMemory({
+        content: memoryResult.content,
+        category: memoryResult.category,
+        date: new Date().toISOString().split('T')[0],
+        source: isListening ? 'voice' : 'manual'
+      });
+
+      setInputText('');
+      setMemorySuccessMsg(`Saved ${memoryResult.category.toUpperCase()} to Second Brain!`);
+      setTimeout(() => setMemorySuccessMsg(null), 3000);
+    }
   };
 
   const handlePresetClick = (presetText: string) => {
@@ -50,9 +114,9 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-              AI Natural Language Quick-Add
+              AI Natural Language & Voice Quick-Add
             </h3>
-            <p className="text-[10px] text-slate-500">Type naturally to instantly log and categorize transactions</p>
+            <p className="text-[10px] text-slate-500">Speak or type expenses, peer loans, or real-life notes & reminders</p>
           </div>
         </div>
 
@@ -68,10 +132,10 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           </button>
           <button
             type="button"
-            onClick={() => handlePresetClick('Uber auto ₹180')}
+            onClick={() => handlePresetClick('Doctor appointment on Friday at 5pm')}
             className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-900 transition-all cursor-pointer"
           >
-            "Uber auto ₹180"
+            "Doctor appointment"
           </button>
         </div>
       </div>
@@ -82,33 +146,62 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="e.g., Spent ₹350 on Zomato dinner yesterday via UPI..."
-          className="w-full pl-4 pr-32 py-3 rounded-xl bg-slate-950 border border-slate-900 text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none focus:border-slate-800 transition-all"
+          placeholder={isListening ? "Listening... Speak now..." : "Type or click mic to speak: e.g. Spent ₹350 on dinner or Doctor appointment Friday..."}
+          className={`w-full pl-4 pr-36 py-3 rounded-xl bg-slate-950 border text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none transition-all ${
+            isListening ? 'border-red-500/80 ring-2 ring-red-500/20' : 'border-slate-900 focus:border-slate-800'
+          }`}
         />
 
-        <button
-          type="submit"
-          disabled={!parsedResult.amount || parsedResult.amount <= 0}
-          className={`absolute right-2 px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all duration-300 ${
-            isSuccess
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : parsedResult.amount && parsedResult.amount > 0
-              ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'
-              : 'bg-slate-900 text-slate-600 cursor-not-allowed'
-          }`}
-        >
-          {isSuccess ? (
-            <>
-              <Check className="w-3.5 h-3.5" />
-              <span>Logged!</span>
-            </>
-          ) : (
-            <>
-              <span>Log Record</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </>
-          )}
-        </button>
+        <div className="absolute right-2 flex items-center space-x-1.5">
+          {/* Microphone Voice Recording Trigger Button */}
+          <button
+            type="button"
+            onClick={toggleVoiceRecording}
+            title={isListening ? "Stop voice listening" : "Start voice dictation"}
+            className={`p-2 rounded-lg text-xs font-bold transition-all duration-300 cursor-pointer ${
+              isListening
+                ? 'bg-red-600 text-white animate-pulse shadow-md shadow-red-600/30'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-indigo-400" />}
+          </button>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={(!parsedResult.amount || parsedResult.amount <= 0) && (!memoryResult.isMemory || !inputText.trim())}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all duration-300 ${
+              isSuccess || memorySuccessMsg
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : (parsedResult.amount && parsedResult.amount > 0) || (memoryResult.isMemory && inputText.trim())
+                ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer'
+                : 'bg-slate-900 text-slate-600 cursor-not-allowed'
+            }`}
+          >
+            {isSuccess ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span>Logged!</span>
+              </>
+            ) : memorySuccessMsg ? (
+              <>
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Note Saved!</span>
+              </>
+            ) : memoryResult.isMemory && !parsedResult.amount ? (
+              <>
+                <span>Save Note</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            ) : (
+              <>
+                <span>Log Record</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            )}
+          </button>
+        </div>
       </form>
 
       {/* Real-time Live AI Parsing Preview Badge Strip */}
@@ -119,25 +212,36 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
             Parser Preview:
           </span>
 
-          {/* Amount Badge */}
-          <div className={`px-3 py-1 rounded-xl flex items-center space-x-1 font-bold text-xs ${
-            parsedResult.amount ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/10' : 'bg-slate-950 text-slate-600 border border-slate-900/50'
-          }`}>
-            <IndianRupee className="w-3.5 h-3.5" />
-            <span>{parsedResult.amount ? `${parsedResult.amount}` : 'Amount missing'}</span>
-          </div>
+          {parsedResult.amount ? (
+            <>
+              {/* Amount Badge */}
+              <div className="px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 flex items-center space-x-1 font-bold text-xs">
+                <IndianRupee className="w-3.5 h-3.5" />
+                <span>₹{parsedResult.amount}</span>
+              </div>
 
-          {/* Category Badge */}
-          <div className="px-3 py-1 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 flex items-center space-x-1 font-semibold">
-            <Tag className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Category: {parsedResult.category}</span>
-          </div>
+              {/* Category Badge */}
+              <div className="px-3 py-1 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 flex items-center space-x-1 font-semibold">
+                <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{parsedResult.category}</span>
+              </div>
 
-          {/* Payment Method Badge */}
-          <div className="px-3 py-1 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/10 flex items-center space-x-1 font-semibold">
-            <CreditCard className="w-3.5 h-3.5 text-purple-400" />
-            <span>{parsedResult.paymentMethod}</span>
-          </div>
+              {/* Payment Method Badge */}
+              <div className="px-3 py-1 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/10 flex items-center space-x-1 font-semibold">
+                <CreditCard className="w-3.5 h-3.5 text-purple-400" />
+                <span>{parsedResult.paymentMethod}</span>
+              </div>
+            </>
+          ) : memoryResult.isMemory ? (
+            <div className="px-3 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center space-x-1 font-bold text-xs">
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Second Brain Note ({memoryResult.category.toUpperCase()})</span>
+            </div>
+          ) : (
+            <div className="px-3 py-1 rounded-xl bg-slate-950 text-slate-500 border border-slate-900 flex items-center space-x-1 font-medium text-xs">
+              <span>Text Entry</span>
+            </div>
+          )}
 
           {/* Date Badge */}
           <div className="px-3 py-1 rounded-xl bg-slate-950 text-slate-400 border border-slate-900 flex items-center space-x-1 font-semibold">
