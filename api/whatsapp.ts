@@ -8,10 +8,11 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Initialize OmniRoute & Gemini Settings
+// Initialize OmniRoute, Groq & Gemini Settings
 const omnirouteUrl = process.env.OMNIROUTE_URL || 'http://localhost:20128/v1';
 const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
-const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const geminiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+const groqApiKey = process.env.GROQ_API_KEY || '';
 
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
@@ -448,9 +449,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             let transcriptionText = '';
             const audioBase64 = audioBuffer.toString('base64');
 
-            // Multi-model audio transcription fallback list to prevent unhandled 401 / unsupported model errors
-            const audioModelsToTry = [
+            // Multi-model audio transcription fallback list with fast timeouts to avoid Render cold-start 25s delays
+            const audioModelsToTry: Array<
+              | { type: 'gemini_direct'; key: string }
+              | { type: 'groq_direct'; key: string }
+              | { type: 'omniroute'; model: string }
+            > = [
               { type: 'gemini_direct', key: geminiApiKey },
+              { type: 'groq_direct', key: groqApiKey },
               { type: 'omniroute', model: 'gemini-2.0-flash' },
               { type: 'omniroute', model: 'whisper-1' },
               { type: 'omniroute', model: 'auto/best-vision' },
@@ -463,7 +469,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (item.type === 'gemini_direct') {
                 if (!item.key) continue;
                 try {
-                  console.log('Trying direct Gemini API for voice note transcription...');
+                  console.log('Trying direct Gemini API for instant voice note transcription...');
                   const gRes = await axios.post(
                     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${item.key}`,
                     {
@@ -481,7 +487,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         }
                       ]
                     },
-                    { timeout: 15000 }
+                    { timeout: 12000 }
                   );
                   transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
                   if (transcriptionText) break;
@@ -489,9 +495,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   console.warn('Gemini direct audio transcription failed, trying next provider:', e.message);
                   lastAudioError = e;
                 }
+              } else if (item.type === 'groq_direct') {
+                if (!item.key) continue;
+                try {
+                  console.log('Trying Groq Whisper API for voice note transcription...');
+                  const groqRes = await axios.post(
+                    'https://api.groq.com/openai/v1/audio/transcriptions',
+                    {
+                      file: `data:audio/ogg;base64,${audioBase64}`,
+                      model: 'whisper-large-v3-turbo'
+                    },
+                    {
+                      headers: { Authorization: `Bearer ${item.key}` },
+                      timeout: 10000
+                    }
+                  );
+                  transcriptionText = groqRes.data?.text?.trim() || '';
+                  if (transcriptionText) break;
+                } catch (e: any) {
+                  console.warn('Groq direct audio transcription failed:', e.message);
+                  lastAudioError = e;
+                }
               } else if (item.type === 'omniroute') {
                 try {
-                  console.log(`Trying OmniRoute model "${item.model}" for voice note transcription...`);
+                  console.log(`Trying OmniRoute model "${item.model}" (fast 6s timeout) for voice transcription...`);
                   const omniRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
                     model: item.model,
                     messages: [
@@ -511,13 +538,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     ]
                   }, {
                     headers: { Authorization: `Bearer ${omnirouteKey}` },
-                    timeout: 25000
+                    timeout: 6000 // Fast 6s timeout to prevent Render cold-start hanging Vercel
                   });
 
                   transcriptionText = omniRes.data?.choices?.[0]?.message?.content?.trim() || '';
                   if (transcriptionText) break;
                 } catch (e: any) {
-                  console.warn(`OmniRoute audio transcription model "${item.model}" failed:`, e.response?.data?.error?.message || e.message);
+                  console.warn(`OmniRoute audio model "${item.model}" failed:`, e.response?.data?.error?.message || e.message);
                   lastAudioError = e;
                 }
               }
@@ -534,7 +561,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             msg.text = { body: transcriptionText };
           } catch (audioErr: any) {
             console.error('Audio Transcription Error:', audioErr);
-            replyBody = `⚠️ *Voice Transcription failed:* ${audioErr.response?.data?.error?.message || audioErr.message || 'Service unavailable'}`;
+            if (audioErr.code === 'ECONNABORTED' || audioErr.message?.includes('timeout') || audioErr.response?.status === 502) {
+              replyBody = `🎤 *Voice Note Received:* Audio processing server is taking a moment to wake up. Please re-send your voice note or type your entry as text!`;
+            } else {
+              replyBody = `⚠️ *Voice Transcription Notice:* Could not parse audio. Please re-send or type your expense/note as text.`;
+            }
           }
         }
 
