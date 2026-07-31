@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
   Plus, 
@@ -52,11 +52,7 @@ export const PeerBalancesView: React.FC<PeerBalancesViewProps> = ({ theme, onUpd
   const [paybackDate, setPaybackDate] = useState(new Date().toISOString().split('T')[0]);
   const [paybackNotes, setPaybackNotes] = useState('');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     // Show current local data first for fast load
     setGroupedSummaries(PeerService.getGroupedSummaries());
     
@@ -67,7 +63,11 @@ export const PeerBalancesView: React.FC<PeerBalancesViewProps> = ({ theme, onUpd
     if (onUpdateMetrics) {
       onUpdateMetrics();
     }
-  };
+  }, [onUpdateMetrics]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleOpenAddModal = () => {
     setRecordId(null);

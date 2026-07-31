@@ -37,7 +37,7 @@ function autoCategorize(text: string): string {
   return 'Others';
 }
 
-function parseTextExpense(text: string) {
+export function parseTextExpense(text: string) {
   const trimmed = text.trim();
   let amount: number | null = null;
   
@@ -123,7 +123,7 @@ function parseFlexibleDate(str: string): string {
   return clean;
 }
 
-function parseTextPeerRecord(text: string) {
+export function parseTextPeerRecord(text: string) {
   const lower = text.toLowerCase();
   
   // Check if text has structured key-value template format (e.g. contains colons and split pipes or newlines)
@@ -326,12 +326,12 @@ function parseTextPeerRecord(text: string) {
     
     // Remove name if included
     if (peerName && peerName !== 'Friend') {
-      const nameEscaped = peerName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const nameEscaped = peerName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       description = description.replace(new RegExp('\\b' + nameEscaped + '\\b', 'gi'), '');
     }
-    
+      
     description = description.replace(/\s+/g, ' ').trim();
-    
+      
     if (description.length > 25) {
       description = description.slice(0, 25) + '...';
     }
@@ -352,7 +352,7 @@ function parseTextPeerRecord(text: string) {
   };
 }
 
-function parseTextPayback(text: string) {
+export function parseTextPayback(text: string) {
   const lower = text.toLowerCase();
   const isPaybackPattern = /\b(paid|payback|settled|returned|repaid)\b/i.test(lower);
   if (!isPaybackPattern) {

@@ -334,7 +334,7 @@ export class AIFinanceService {
       
       // Remove name if included
       if (peerName && peerName !== 'Friend') {
-        const nameEscaped = peerName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const nameEscaped = peerName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
         description = description.replace(new RegExp('\\b' + nameEscaped + '\\b', 'gi'), '');
       }
       

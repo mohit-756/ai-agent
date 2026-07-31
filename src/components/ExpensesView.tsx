@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Expense, Category, PaymentMethod } from '../types/expense';
 import { formatCurrency } from '../services/expenseService';
+import { exportExpensesToCSV } from '../utils/csvExport';
 import { AnalyticsView } from './AnalyticsView';
 
 interface ExpensesViewProps {
@@ -90,26 +91,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   // CSV Export Handler
   const handleExportCSV = () => {
-    const headers = ['ID', 'Date', 'Description', 'Merchant', 'Category', 'Amount (INR)', 'Payment Method', 'Notes'];
-    const rows = sorted.map(e => [
-      e.id,
-      e.date,
-      `"${e.description.replace(/"/g, '""')}"`,
-      `"${(e.merchant || '').replace(/"/g, '""')}"`,
-      e.category,
-      e.amount,
-      e.paymentMethod,
-      `"${(e.notes || '').replace(/"/g, '""')}"`
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `SpendWise_Expenses_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportExpensesToCSV(sorted, `SpendWise_Expenses_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
   return (
