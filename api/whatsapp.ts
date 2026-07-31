@@ -9,7 +9,7 @@ const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 // Initialize OmniRoute, Groq & Gemini Settings
-const omnirouteUrl = process.env.OMNIROUTE_URL || 'http://localhost:20128/v1';
+const omnirouteUrl = process.env.OMNIROUTE_URL || 'https://omniroute-gd65.onrender.com/v1';
 const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const groqApiKey = process.env.GROQ_API_KEY || '';
@@ -451,11 +451,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // Multi-model audio transcription fallback list with fast timeouts to avoid Render cold-start 25s delays
             const audioModelsToTry: Array<
-              | { type: 'gemini_direct'; key: string }
+              | { type: 'gemini_direct'; key: string; model: string }
               | { type: 'groq_direct'; key: string }
               | { type: 'omniroute'; model: string }
             > = [
-              { type: 'gemini_direct', key: geminiApiKey },
+              { type: 'gemini_direct', key: geminiApiKey, model: 'gemini-2.0-flash' },
+              { type: 'gemini_direct', key: geminiApiKey, model: 'gemini-1.5-flash' },
               { type: 'groq_direct', key: groqApiKey },
               { type: 'omniroute', model: 'gemini-2.0-flash' },
               { type: 'omniroute', model: 'whisper-1' },
@@ -469,9 +470,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (item.type === 'gemini_direct') {
                 if (!item.key) continue;
                 try {
-                  console.log('Trying direct Gemini API for instant voice note transcription...');
+                  console.log(`Trying direct Gemini API (${item.model}) for instant voice note transcription...`);
                   const gRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${item.key}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/${item.model}:generateContent?key=${item.key}`,
                     {
                       contents: [
                         {
@@ -492,7 +493,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
                   if (transcriptionText) break;
                 } catch (e: any) {
-                  console.warn('Gemini direct audio transcription failed, trying next provider:', e.message);
+                  console.warn(`Gemini direct audio transcription (${item.model}) failed, trying next provider:`, e.message);
                   lastAudioError = e;
                 }
               } else if (item.type === 'groq_direct') {
