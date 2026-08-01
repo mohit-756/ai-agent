@@ -11,32 +11,7 @@ export interface MemoryItem {
 
 const MEMORIES_STORAGE_KEY = 'spendwise_real_life_memories';
 
-const INITIAL_MEMORIES: MemoryItem[] = [
-  {
-    id: 'mem-1',
-    content: 'Doctor appointment scheduled for Friday at 5:00 PM',
-    category: 'reminder',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    date: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
-    source: 'voice'
-  },
-  {
-    id: 'mem-2',
-    content: 'Buy groceries: organic milk, sourdough bread, avocados',
-    category: 'task',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    date: new Date().toISOString().split('T')[0],
-    source: 'manual'
-  },
-  {
-    id: 'mem-3',
-    content: 'Idea: Build a 1-click WhatsApp voice expense and note logger',
-    category: 'idea',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    date: new Date().toISOString().split('T')[0],
-    source: 'voice'
-  }
-];
+const INITIAL_MEMORIES: MemoryItem[] = [];
 
 export class MemoryService {
   public static getMemories(): MemoryItem[] {
@@ -50,6 +25,12 @@ export class MemoryService {
     } catch {
       return INITIAL_MEMORIES;
     }
+  }
+
+  public static clearAllData(): MemoryItem[] {
+    localStorage.removeItem(MEMORIES_STORAGE_KEY);
+    this.saveMemories([]);
+    return [];
   }
 
   public static saveMemories(memories: MemoryItem[]): void {

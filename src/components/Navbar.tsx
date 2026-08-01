@@ -6,10 +6,14 @@ import {
   Bot, 
   Plus, 
   Sparkles,
-  RotateCcw,
+  Trash2,
   Palette,
-  Users
+  Users,
+  User,
+  LogOut,
+  LogIn
 } from 'lucide-react';
+import type { UserSession } from './AuthModal';
 
 export type ActiveTab = 'dashboard' | 'expenses' | 'budgets' | 'ai-assistant' | 'peer-ledger';
 
@@ -17,7 +21,10 @@ interface NavbarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   onOpenAddModal: () => void;
-  onResetDemoData: () => void;
+  onClearAllData: () => void;
+  userSession: UserSession | null;
+  onOpenAuth: () => void;
+  onLogout: () => void;
   totalExpensesCount: number;
   unreadInsightsCount: number;
   pendingPeersCount: number;
@@ -29,7 +36,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   onOpenAddModal,
-  onResetDemoData,
+  onClearAllData,
+  userSession,
+  onOpenAuth,
+  onLogout,
   totalExpensesCount,
   unreadInsightsCount,
   pendingPeersCount,
@@ -97,30 +107,55 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </nav>
 
-          {/* Right Action Controls */}
+          {/* Right Action Controls & User Auth */}
           <div className="flex items-center space-x-2">
-            {/* Reset Demo Data Button */}
+            {/* Clear All Data Button */}
             <button
-              onClick={onResetDemoData}
-              title="Reset to initial demo dataset"
-              className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer"
+              onClick={onClearAllData}
+              title="Clear all expenses and memory data"
+              className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-900 transition-all cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
 
             {/* Theme Toggle Button */}
             <button
               onClick={onToggleTheme}
-              title={`Switch to theme`}
-              className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer mr-1"
+              title="Switch color theme"
+              className="p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-900 transition-all cursor-pointer"
             >
-              <Palette className="w-3.5 h-3.5 text-slate-500" />
+              <Palette className="w-3.5 h-3.5" />
             </button>
+
+            {/* User Profile / Auth State */}
+            {userSession && userSession.isLoggedIn ? (
+              <div className="flex items-center space-x-1.5 bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                <User className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-xs font-bold text-slate-200 max-w-[90px] truncate">
+                  {userSession.name}
+                </span>
+                <button
+                  onClick={onLogout}
+                  title="Sign out of account"
+                  className="p-1 rounded-lg text-slate-400 hover:text-rose-400 transition cursor-pointer ml-1"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-indigo-400 text-xs font-bold transition cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
 
             {/* Add Expense Modal Trigger */}
             <button
               onClick={onOpenAddModal}
-              className={`flex items-center space-x-1 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center space-x-1 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 theme === 'mono'
                   ? 'bg-white text-black hover:bg-neutral-200'
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'

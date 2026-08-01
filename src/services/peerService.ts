@@ -3,71 +3,7 @@ import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 const PEER_STORAGE_KEY = 'ai_expense_tracker_peer_records';
 
-function getRelativeDate(daysOffset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysOffset);
-  return d.toISOString().split('T')[0];
-}
-
-const INITIAL_PEER_RECORDS: PeerRecord[] = [
-  {
-    id: 'peer-1',
-    name: 'Rohit Sharma',
-    amount: 1200,
-    originalAmount: 1200,
-    type: 'lent',
-    description: 'Cricket match tickets split',
-    date: getRelativeDate(3),
-    dueDate: getRelativeDate(-2), // overdue
-    status: 'pending',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    payments: []
-  },
-  {
-    id: 'peer-2',
-    name: 'Sneha Patel',
-    amount: 500,
-    originalAmount: 500,
-    type: 'lent',
-    description: 'Cafe coffee & desserts',
-    date: getRelativeDate(1),
-    dueDate: getRelativeDate(2), // due in future
-    status: 'pending',
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-    payments: []
-  },
-  {
-    id: 'peer-3',
-    name: 'Amit Verma',
-    amount: 1500,
-    originalAmount: 1500,
-    type: 'borrowed',
-    description: 'Electricity bill split share',
-    date: getRelativeDate(5),
-    status: 'pending',
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    payments: []
-  },
-  {
-    id: 'peer-4',
-    name: 'Rohit Sharma',
-    amount: 0,
-    originalAmount: 800,
-    type: 'lent',
-    description: 'Weekend lunch buffet',
-    date: getRelativeDate(4),
-    status: 'settled',
-    createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
-    payments: [
-      {
-        id: 'pay-1',
-        amount: 800,
-        date: getRelativeDate(1),
-        notes: 'Paid back via GPay'
-      }
-    ]
-  }
-];
+const INITIAL_PEER_RECORDS: PeerRecord[] = [];
 
 export class PeerService {
   public static getPeerRecords(): PeerRecord[] {
@@ -82,6 +18,12 @@ export class PeerService {
       console.error('Failed to parse peer records from localStorage', e);
       return INITIAL_PEER_RECORDS;
     }
+  }
+
+  public static clearAllData(): PeerRecord[] {
+    localStorage.removeItem(PEER_STORAGE_KEY);
+    this.savePeerRecords([]);
+    return [];
   }
 
   public static savePeerRecords(records: PeerRecord[]): void {

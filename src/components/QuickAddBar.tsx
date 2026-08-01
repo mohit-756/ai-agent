@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, Check, Tag, CreditCard, Calendar, IndianRupee, Mic, MicOff, BookOpen } from 'lucide-react';
+import { Sparkles, ArrowRight, Check, Tag, CreditCard, Calendar, IndianRupee, BookOpen } from 'lucide-react';
 import { AIFinanceService } from '../services/aiFinanceService';
 import { MemoryService } from '../services/memoryService';
 import type { Expense } from '../types/expense';
@@ -14,7 +14,6 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
   const [memoryResult, setMemoryResult] = useState(() => AIFinanceService.parseNaturalLanguageMemory(''));
   const [isSuccess, setIsSuccess] = useState(false);
   const [memorySuccessMsg, setMemorySuccessMsg] = useState<string | null>(null);
-  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
     const expResult = AIFinanceService.parseNaturalLanguageExpense(inputText);
@@ -22,47 +21,6 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
     setParsedResult(expResult);
     setMemoryResult(memResult);
   }, [inputText]);
-
-  const toggleVoiceRecording = () => {
-    const windowObj = window as any;
-    const SpeechRecognition = windowObj.SpeechRecognition || windowObj.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert('Speech recognition is not supported by your browser. Please try Google Chrome or MS Edge.');
-      return;
-    }
-
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = (err: any) => {
-        console.error('Speech recognition error:', err);
-        setIsListening(false);
-      };
-
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((res: any) => res[0].transcript)
-          .join('');
-        setInputText(transcript);
-      };
-
-      recognition.start();
-    } catch (err) {
-      console.error('Speech recognition error:', err);
-      setIsListening(false);
-    }
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +30,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
       onAddExpense({
         amount: parsedResult.amount,
         category: parsedResult.category,
-        description: parsedResult.description || 'Voice / Natural Language Input',
+        description: parsedResult.description || 'Natural Language Input',
         merchant: parsedResult.merchant,
         paymentMethod: parsedResult.paymentMethod,
         date: parsedResult.date
@@ -90,7 +48,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
         content: memoryResult.content,
         category: memoryResult.category,
         date: new Date().toISOString().split('T')[0],
-        source: isListening ? 'voice' : 'manual'
+        source: 'manual'
       });
 
       setInputText('');
@@ -114,9 +72,9 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-              AI Natural Language & Voice Quick-Add
+              AI Natural Language Quick-Add
             </h3>
-            <p className="text-[10px] text-slate-500">Speak or type expenses, peer loans, or real-life notes & reminders</p>
+            <p className="text-[10px] text-slate-500">Type expenses, peer loans, or real-life notes & reminders</p>
           </div>
         </div>
 
@@ -146,28 +104,11 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={isListening ? "Listening... Speak now..." : "Type or click mic to speak: e.g. Spent ₹350 on dinner or Doctor appointment Friday..."}
-          className={`w-full pl-4 pr-36 py-3 rounded-xl bg-slate-950 border text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none transition-all ${
-            isListening ? 'border-red-500/80 ring-2 ring-red-500/20' : 'border-slate-900 focus:border-slate-800'
-          }`}
+          placeholder="Type your entry: e.g. Spent ₹350 on dinner or Doctor appointment Friday..."
+          className="w-full pl-4 pr-32 py-3 rounded-xl bg-slate-950 border border-slate-900 focus:border-slate-800 text-white placeholder-slate-600 text-xs sm:text-sm font-medium focus:outline-none transition-all"
         />
 
         <div className="absolute right-2 flex items-center space-x-1.5">
-          {/* Microphone Voice Recording Trigger Button */}
-          <button
-            type="button"
-            onClick={toggleVoiceRecording}
-            title={isListening ? "Stop voice listening" : "Start voice dictation"}
-            className={`p-2 rounded-lg text-xs font-bold transition-all duration-300 cursor-pointer ${
-              isListening
-                ? 'bg-red-600 text-white animate-pulse shadow-md shadow-red-600/30'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-indigo-400" />}
-          </button>
-
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={(!parsedResult.amount || parsedResult.amount <= 0) && (!memoryResult.isMemory || !inputText.trim())}
@@ -214,19 +155,16 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
 
           {parsedResult.amount ? (
             <>
-              {/* Amount Badge */}
               <div className="px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/10 flex items-center space-x-1 font-bold text-xs">
                 <IndianRupee className="w-3.5 h-3.5" />
                 <span>₹{parsedResult.amount}</span>
               </div>
 
-              {/* Category Badge */}
               <div className="px-3 py-1 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/10 flex items-center space-x-1 font-semibold">
                 <Tag className="w-3.5 h-3.5 text-indigo-400" />
                 <span>{parsedResult.category}</span>
               </div>
 
-              {/* Payment Method Badge */}
               <div className="px-3 py-1 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/10 flex items-center space-x-1 font-semibold">
                 <CreditCard className="w-3.5 h-3.5 text-purple-400" />
                 <span>{parsedResult.paymentMethod}</span>
@@ -243,7 +181,6 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({ onAddExpense }) => {
             </div>
           )}
 
-          {/* Date Badge */}
           <div className="px-3 py-1 rounded-xl bg-slate-950 text-slate-400 border border-slate-900 flex items-center space-x-1 font-semibold">
             <Calendar className="w-3.5 h-3.5 text-slate-500" />
             <span>{parsedResult.date}</span>

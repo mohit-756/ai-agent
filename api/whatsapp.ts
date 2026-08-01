@@ -8,11 +8,8 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Initialize Model API Keys and Endpoints
-const omnirouteUrl = process.env.OMNIROUTE_URL || 'https://omniroute-gd65.onrender.com/v1';
-const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
+// Initialize Direct Google Gemini API Settings
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
-const groqApiKey = process.env.GROQ_API_KEY || '';
 
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
@@ -40,11 +37,9 @@ function autoCategorize(text: string): string {
 
 export function parseTextExpense(text: string) {
   const trimmed = text.trim();
-  // Normalize numbers with spaces around commas e.g. "35 ,000" -> "35000"
   const normalizedText = trimmed.replace(/(\d+)\s*,\s*(\d+)/g, '$1$2');
   let amount: number | null = null;
   
-  // 1. Search for numbers with explicit currency symbols (₹, Rs, INR) first
   const currencyRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)/i;
   const currencyMatch = normalizedText.match(currencyRegex);
   if (currencyMatch) {
@@ -54,7 +49,6 @@ export function parseTextExpense(text: string) {
       amount = parsed;
     }
   } else {
-    // 2. Fallback to raw numbers with word boundaries
     const rawRegex = /\b([\d,]+(?:\.\d+)?)\b/;
     const rawMatch = normalizedText.match(rawRegex);
     if (rawMatch) {
@@ -127,7 +121,6 @@ export function parseMultipleTextExpenses(text: string) {
   for (const line of lines) {
     const lineLower = line.toLowerCase();
     
-    // Skip line if it's purely a payment method indicator (like "pp", "cash", "upi", "phonepe")
     if (/^(pp|phonepe|upi|gpay|paytm|cash|credit card|debit card|cc|dc)$/i.test(lineLower)) {
       continue;
     }
@@ -181,19 +174,12 @@ export function parseIncomeRecord(text: string) {
 function parseFlexibleDate(str: string): string {
   const clean = str.trim().replace(/[^0-9-/]/g, '');
   
-  // 1. Matches YYYY-MM-DD
   const ymd = clean.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
-  if (ymd) {
-    return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
-  }
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
   
-  // 2. Matches DD-MM-YYYY or DD/MM/YYYY
   const dmy = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
-  if (dmy) {
-    return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  }
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
 
-  // 3. Matches DD-MM-YY or DD/MM/YY
   const dmyShort = clean.match(/^(\d{2})[-/](\d{2})[-/](\d{2})$/);
   if (dmyShort) {
     const year = parseInt(dmyShort[3]) < 50 ? `20${dmyShort[3]}` : `19${dmyShort[3]}`;
@@ -520,153 +506,50 @@ interface LLMCompletionOptions {
   jsonMode?: boolean;
   imageBase64?: string;
   mimeType?: string;
-  audioBase64?: string;
-  audioMimeType?: string;
   timeoutMs?: number;
 }
 
 /**
- * Robust Multi-Model LLM Provider Fallthrough Function
- * Priority: Direct Gemini API -> Direct Groq API -> OmniRoute (Render) -> null (Fallback)
+ * Direct Google Gemini API LLM Call (No OmniRoute Dependency)
  */
 async function callLLMCompletion(options: LLMCompletionOptions): Promise<string | null> {
-  // 1. Direct Gemini API Call
-  if (geminiApiKey) {
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
-    for (const model of models) {
-      try {
-        console.log(`Calling direct Gemini API (${model})...`);
-        const parts: any[] = [];
-        if (options.systemPrompt) {
-          parts.push({ text: `[System Directive]: ${options.systemPrompt}` });
-        }
-        if (options.userMessage) {
-          parts.push({ text: options.userMessage });
-        }
-        if (options.imageBase64) {
-          parts.push({
-            inlineData: {
-              mimeType: options.mimeType || 'image/jpeg',
-              data: options.imageBase64
-            }
-          });
-        }
-        if (options.audioBase64) {
-          parts.push({
-            inlineData: {
-              mimeType: options.audioMimeType || 'audio/ogg',
-              data: options.audioBase64
-            }
-          });
-        }
+  if (!geminiApiKey) return null;
 
-        const body: any = { contents: [{ parts }] };
-        if (options.jsonMode) {
-          body.generationConfig = { responseMimeType: 'application/json' };
-        }
-
-        const res = await axios.post(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
-          body,
-          { timeout: options.timeoutMs || 8000 }
-        );
-
-        const content = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (content) return content;
-      } catch (err: any) {
-        console.warn(`Gemini direct model ${model} failed:`, err.response?.data?.error?.message || err.message);
-      }
-    }
-  }
-
-  // 2. Direct Groq API Call
-  if (groqApiKey) {
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+  for (const model of models) {
     try {
-      if (options.audioBase64) {
-        console.log('Calling direct Groq Whisper API for audio transcription...');
-        const groqRes = await axios.post(
-          'https://api.groq.com/openai/v1/audio/transcriptions',
-          {
-            file: `data:${options.audioMimeType || 'audio/ogg'};base64,${options.audioBase64}`,
-            model: 'whisper-large-v3-turbo'
-          },
-          { headers: { Authorization: `Bearer ${groqApiKey}` }, timeout: 8000 }
-        );
-        const text = groqRes.data?.text?.trim();
-        if (text) return text;
-      } else if (!options.imageBase64) {
-        console.log('Calling direct Groq Chat API...');
-        const messages = [];
-        if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
-        if (options.userMessage) messages.push({ role: 'user', content: options.userMessage });
-
-        const body: any = {
-          model: 'llama-3.3-70b-versatile',
-          messages
-        };
-        if (options.jsonMode) body.response_format = { type: 'json_object' };
-
-        const groqRes = await axios.post(
-          'https://api.groq.com/openai/v1/chat/completions',
-          body,
-          { headers: { Authorization: `Bearer ${groqApiKey}` }, timeout: 8000 }
-        );
-        const text = groqRes.data?.choices?.[0]?.message?.content?.trim();
-        if (text) return text;
+      console.log(`Calling Direct Google Gemini API (${model})...`);
+      const parts: any[] = [];
+      if (options.systemPrompt) {
+        parts.push({ text: `[System Directive]: ${options.systemPrompt}` });
       }
-    } catch (err: any) {
-      console.warn('Groq direct API failed:', err.response?.data?.error?.message || err.message);
-    }
-  }
-
-  // 3. OmniRoute Proxy Call
-  if (omnirouteUrl) {
-    try {
-      console.log('Calling OmniRoute API...');
-      const messages: any[] = [];
-      if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
-
+      if (options.userMessage) {
+        parts.push({ text: options.userMessage });
+      }
       if (options.imageBase64) {
-        messages.push({
-          role: 'user',
-          content: [
-            { type: 'text', text: options.userMessage || 'Scan this receipt or image' },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${options.mimeType || 'image/jpeg'};base64,${options.imageBase64}` }
-            }
-          ]
+        parts.push({
+          inlineData: {
+            mimeType: options.mimeType || 'image/jpeg',
+            data: options.imageBase64
+          }
         });
-      } else if (options.audioBase64) {
-        messages.push({
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
-            {
-              type: 'image_url',
-              url: `data:${options.audioMimeType || 'audio/ogg'};base64,${options.audioBase64}`
-            }
-          ]
-        });
-      } else {
-        messages.push({ role: 'user', content: options.userMessage });
       }
 
-      const body: any = {
-        model: options.imageBase64 ? 'auto/best-vision' : 'auto',
-        messages
-      };
-      if (options.jsonMode) body.response_format = { type: 'json_object' };
+      const body: any = { contents: [{ parts }] };
+      if (options.jsonMode) {
+        body.generationConfig = { responseMimeType: 'application/json' };
+      }
 
-      const omniRes = await axios.post(
-        `${omnirouteUrl}/chat/completions`,
+      const res = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
         body,
-        { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 6000 }
+        { timeout: options.timeoutMs || 8000 }
       );
-      const text = omniRes.data?.choices?.[0]?.message?.content?.trim();
-      if (text) return text;
+
+      const content = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (content) return content;
     } catch (err: any) {
-      console.warn('OmniRoute API failed:', err.response?.data?.error?.message || err.message);
+      console.warn(`Gemini direct model ${model} failed:`, err.response?.data?.error?.message || err.message);
     }
   }
 
@@ -705,52 +588,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const messageVal = body.entry[0].changes[0].value;
         phoneId = messageVal.metadata.phone_number_id;
         const msg = messageVal.messages[0];
-        fromNumber = msg.from; // User's WhatsApp Number
+        fromNumber = msg.from;
         
         let replyBody = '';
         let receiptUrl: string | undefined = undefined;
 
-        // Process audio messages & voice notes
+        // Audio/Voice notes disabled per user preference
         const audioObj = msg.audio || msg.voice;
         if ((msg.type === 'audio' || msg.type === 'voice') && audioObj) {
-          const mediaId = audioObj.id;
-          try {
-            console.log(`Processing voice note audio: ${mediaId}`);
-            // Get Meta download URL
-            const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
-              headers: { Authorization: `Bearer ${whatsappToken}` }
-            });
-            
-            // Download audio buffer
-            const audioRes = await axios.get(mediaRes.data.url, {
-              headers: { Authorization: `Bearer ${whatsappToken}` },
-              responseType: 'arraybuffer'
-            });
-            const audioBuffer = Buffer.from(audioRes.data);
-            const audioBase64 = audioBuffer.toString('base64');
-            const audioMime = audioObj.mime_type || 'audio/ogg';
-
-            const transcriptionText = await callLLMCompletion({
-              audioBase64,
-              audioMimeType: audioMime,
-              timeoutMs: 10000
-            });
-
-            if (transcriptionText) {
-              console.log(`Voice note transcribed: "${transcriptionText}"`);
-              msg.type = 'text';
-              msg.text = { body: transcriptionText };
-            } else {
-              replyBody = `🎤 *Voice Note Received:* Audio processing server is taking a moment to wake up. Please re-send your voice note or type your entry as text!`;
-            }
-          } catch (audioErr: any) {
-            console.error('Audio Transcription Error:', audioErr);
-            replyBody = `🎤 *Voice Note Received:* Audio processing server is waking up. Please re-send or type your expense/note as text.`;
-          }
+          replyBody = `🎤 *Voice messages are disabled.* Please type your expense, income, or note as text!`;
         }
 
-        // Process image messages (Receipt OCR)
-        if (msg.type === 'image' && msg.image) {
+        // Process image messages (Receipt OCR via Direct Gemini API)
+        else if (msg.type === 'image' && msg.image) {
           const mediaId = msg.image.id;
           try {
             if (!supabase) throw new Error('Supabase client is not initialized.');
@@ -827,7 +677,7 @@ Return ONLY a clean JSON object without markdown fences:
                   merchant: parsed.merchant,
                   paymentmethod: parsed.paymentMethod,
                   date: parsed.date,
-                  notes: 'Receipt image scanned via AI OCR',
+                  notes: 'Receipt image scanned via Gemini OCR',
                   source: 'whatsapp',
                   receipt_url: receiptUrl || null
                 }]);
@@ -846,7 +696,7 @@ Return ONLY a clean JSON object without markdown fences:
                 replyBody = `⚠️ Could not extract valid amount from this receipt scan.`;
               }
             } else {
-              replyBody = `⚠️ *Receipt Scan:* AI OCR processing failed. Please type your expense as text.`;
+              replyBody = `⚠️ *Receipt Scan:* Could not scan receipt image. Please type your expense as text.`;
             }
 
           } catch (ocrErr: any) {
@@ -855,7 +705,7 @@ Return ONLY a clean JSON object without markdown fences:
           }
         }
 
-        // Process text messages (transcribed or direct)
+        // Process text messages
         else if (msg.text?.body) {
           const msgText = msg.text.body.trim();
           const urlRegex = /(https?:\/\/[^\s]+)/gi;
@@ -880,21 +730,8 @@ Return ONLY a clean JSON object without markdown fences:
               const summaryPrompt = `Summarize the core takeaways of this web page content in 3-4 bullet points:\n\n${content}`;
               const summary = await callLLMCompletion({ userMessage: summaryPrompt }) || 'Web page archived.';
 
-              let embedding = null;
-              try {
-                const embResponse = await axios.post(
-                  `${omnirouteUrl}/embeddings`,
-                  { model: 'text-embedding-3-small', input: summary },
-                  { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 5000 }
-                );
-                embedding = embResponse.data?.data?.[0]?.embedding || null;
-              } catch (e) {
-                console.warn('Embedding generation skipped:', e);
-              }
-
               const { error: memErr } = await supabase.from('memories').insert([{
                 content: `Link Summary for: ${url}\n\n${summary}`,
-                embedding,
                 metadata: { source: 'whatsapp_link', url }
               }]);
 
@@ -907,7 +744,7 @@ Return ONLY a clean JSON object without markdown fences:
             }
           }
 
-          // Scenario B: LLM & Local Fallback Intent Parser
+          // Scenario B: Direct Gemini LLM & Local Deterministic Intent Parser
           else {
             try {
               if (!supabase) throw new Error('Supabase client is not initialized.');
@@ -921,14 +758,14 @@ Intents:
 - "log_peer": lending or borrowing money (e.g., "lent 500 to Sneha for split", "borrowed 1000 from Rohit")
 - "log_payback": settling debts (e.g., "Sneha paid back 500", "repaid 1000 to Rohit")
 - "log_memory": saving a non-monetary real-life note, reminder, task, idea, or memo (e.g., "Doctor appointment on Friday at 5pm", "Buy groceries")
-- "query_database": questioning past transactions or semantic memory (e.g., "who owes me money?", "how much did I spend on cabs?")
+- "query_database": questioning past transactions or memory (e.g., "who owes me money?", "how much did I spend on cabs?")
 - "general_chat": general chatting or greetings
 
 Return Format:
 {
   "intent": "log_expense" | "log_income" | "log_peer" | "log_payback" | "log_memory" | "query_database" | "general_chat",
   "data": {
-    // For log_expense (can contain single object or items array if multiple expenses):
+    // For log_expense:
     "items": [
       {
         "amount": number,
@@ -962,7 +799,6 @@ Return Format:
 
               let parsedIntentObj: any = null;
               
-              // Attempt LLM parsing
               const llmResponseText = await callLLMCompletion({
                 systemPrompt,
                 userMessage: msgText,
@@ -975,20 +811,16 @@ Return Format:
                   const cleanJson = llmResponseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
                   parsedIntentObj = JSON.parse(cleanJson);
                 } catch (pe) {
-                  console.warn('JSON parsing of LLM response failed, invoking local fallback:', pe);
+                  console.warn('JSON parsing failed, falling back to local engine:', pe);
                 }
               }
 
-              // Fallback to local rule-based regex parser if LLM failed or yielded invalid result
               if (!parsedIntentObj || !parsedIntentObj.intent) {
-                console.log('LLM unavailable or invalid, utilizing local rule-based regex parser...');
                 parsedIntentObj = localParseMessage(msgText);
               }
 
               const intent = parsedIntentObj.intent;
               const data = parsedIntentObj.data || {};
-
-              console.log(`Final Detected Intent: ${intent}`, data);
 
               // 1. Log Expense (Single or Multiple items)
               if (intent === 'log_expense') {
@@ -1006,7 +838,7 @@ Return Format:
                     merchant: item.merchant || '',
                     paymentmethod: item.paymentMethod || 'UPI',
                     date: new Date().toISOString().split('T')[0],
-                    notes: `Processed via SpendWise parser: "${msgText}"`,
+                    notes: `Processed via SpendWise: "${msgText}"`,
                     source: 'whatsapp'
                   }));
 
@@ -1030,7 +862,6 @@ Return Format:
                       `Synced with SpendWise!`;
                   }
                 } else {
-                  // Fallback to local memory log if expense amount missing
                   await supabase.from('memories').insert([{
                     content: `[NOTE] ${msgText}`,
                     metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
@@ -1076,7 +907,6 @@ Return Format:
                 }]);
 
                 if (error) {
-                  console.warn('peer_records insert failed, falling back to expenses:', error.message);
                   await supabase.from('expenses').insert([{
                     amount: data.amount,
                     category: 'Others',
@@ -1084,7 +914,7 @@ Return Format:
                     paymentmethod: 'UPI',
                     date: new Date().toISOString().split('T')[0],
                     source: 'whatsapp',
-                    notes: `Logged as fallback (peer_records write failed)`
+                    notes: `Logged as fallback`
                   }]);
 
                   replyBody = `👥 *Logged to Expenses (Fallback)*\n\n• *Detail:* ${data.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${data.peerName}\n• *Amount:* ₹${data.amount}\n• *Desc:* ${data.description}`;
@@ -1132,7 +962,7 @@ Return Format:
                     replyBody = `⚠️ Couldn't find an active pending peer record for "*${data.peerName}*".`;
                   }
                 } else {
-                  replyBody = `⚠️ Could not parse peer name for payback. Make sure to mention who paid back.`;
+                  replyBody = `⚠️ Could not parse peer name for payback.`;
                 }
               }
 
@@ -1144,7 +974,7 @@ Return Format:
                 const { error: memErr } = await supabase.from('memories').insert([{
                   content: `[${memoryCategory}] ${memoryContent}`,
                   metadata: {
-                    source: 'whatsapp_voice_or_text',
+                    source: 'whatsapp_text',
                     category: data.category || 'note',
                     date: new Date().toISOString().split('T')[0]
                   }
@@ -1158,35 +988,8 @@ Return Format:
                   `Stored safely in your SpendWise Second Brain!`;
               }
 
-              // 6. Query Database (Financial Context + Semantic Memory Search)
+              // 6. Query Database
               else if (intent === 'query_database' || intent === 'general_chat') {
-                let memoriesContextText = 'None';
-                
-                if (intent === 'query_database') {
-                  try {
-                    const embResponse = await axios.post(
-                      `${omnirouteUrl}/embeddings`,
-                      { model: 'text-embedding-3-small', input: msgText },
-                      { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 4000 }
-                    );
-                    const qEmbedding = embResponse.data?.data?.[0]?.embedding;
-
-                    if (qEmbedding) {
-                      const { data: matchedMemories } = await supabase.rpc('match_memories', {
-                        query_embedding: qEmbedding,
-                        match_threshold: 0.3,
-                        match_count: 4
-                      });
-
-                      if (matchedMemories && matchedMemories.length > 0) {
-                        memoriesContextText = matchedMemories.map((m: any) => `- [Score: ${m.similarity.toFixed(2)}] ${m.content}`).join('\n');
-                      }
-                    }
-                  } catch (vErr) {
-                    console.warn('Vector memory search skipped:', vErr);
-                  }
-                }
-
                 const { data: peers } = await supabase.from('peer_records').select('*').eq('status', 'pending');
                 const { data: recentExps } = await supabase.from('expenses').select('*').order('date', { ascending: false }).limit(10);
 
@@ -1202,7 +1005,7 @@ Return Format:
                   : 'No recent expenses.';
 
                 const conversationPrompt = `You are SpendWise AI Assistant, a personal finance and second brain agent.
-Answer the user's questions clearly, concisely, and helpfully using the provided financial context and memory summaries.
+Answer the user's questions clearly, concisely, and helpfully using the provided financial context.
 Format output using bullet points and WhatsApp bold (*text*). Keep your response under 150 words.
 
 Active Peer Balances:
@@ -1214,9 +1017,6 @@ ${peerSummary}
 Recent Expenses (Last 10):
 ${expSummary}
 
-Archived Second Brain Memories (similar findings):
-${memoriesContextText}
-
 User's Question: "${msgText}"`;
 
                 const chatReply = await callLLMCompletion({ userMessage: conversationPrompt, timeoutMs: 8000 });
@@ -1225,7 +1025,6 @@ User's Question: "${msgText}"`;
 
             } catch (textErr: any) {
               console.error('Text Processing Error:', textErr);
-              // Fallback to local parsing on unhandled errors to avoid sending 502 raw error to user
               try {
                 const fallbackObj = localParseMessage(msgText);
                 if (fallbackObj.intent === 'log_expense' && fallbackObj.data.items?.length) {

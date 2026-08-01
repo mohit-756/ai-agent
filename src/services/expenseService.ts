@@ -72,116 +72,8 @@ export function formatCurrency(amount: number): string {
 /**
  * Helper to get date relative to today (YYYY-MM-DD)
  */
-function getRelativeDate(daysOffset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysOffset);
-  return d.toISOString().split('T')[0];
-}
-
-// Initial realistic demo transactions
-const INITIAL_TRANSACTIONS: Expense[] = [
-  {
-    id: 'exp-1',
-    amount: 349,
-    category: 'Food & Dining',
-    description: 'Swiggy Lunch - Paneer Butter Masala',
-    merchant: 'Swiggy',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(0),
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    notes: 'Order with colleagues'
-  },
-  {
-    id: 'exp-2',
-    amount: 185,
-    category: 'Transportation',
-    description: 'Uber Auto to Office',
-    merchant: 'Uber',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(0),
-    createdAt: new Date(Date.now() - 3600000 * 7).toISOString()
-  },
-  {
-    id: 'exp-3',
-    amount: 1499,
-    category: 'Shopping & Retail',
-    description: 'Amazon Wireless Headphones',
-    merchant: 'Amazon India',
-    paymentMethod: 'Credit Card',
-    date: getRelativeDate(1),
-    createdAt: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: 'exp-4',
-    amount: 649,
-    category: 'Entertainment',
-    description: 'Netflix Monthly Premium Subscription',
-    merchant: 'Netflix',
-    paymentMethod: 'Credit Card',
-    date: getRelativeDate(2),
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: 'exp-5',
-    amount: 1850,
-    category: 'Bills & Utilities',
-    description: 'BESCOM Electricity Bill Payment',
-    merchant: 'BESCOM',
-    paymentMethod: 'Net Banking',
-    date: getRelativeDate(3),
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString()
-  },
-  {
-    id: 'exp-6',
-    amount: 520,
-    category: 'Health & Wellness',
-    description: 'Apollo Pharmacy Medicines',
-    merchant: 'Apollo Pharmacy',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(4),
-    createdAt: new Date(Date.now() - 86400000 * 4).toISOString()
-  },
-  {
-    id: 'exp-7',
-    amount: 450,
-    category: 'Food & Dining',
-    description: 'Zomato Weekend Dinner',
-    merchant: 'Zomato',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(5),
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString()
-  },
-  {
-    id: 'exp-8',
-    amount: 2200,
-    category: 'Shopping & Retail',
-    description: 'D-Mart Monthly Grocery Run',
-    merchant: 'D-Mart',
-    paymentMethod: 'Debit Card',
-    date: getRelativeDate(6),
-    createdAt: new Date(Date.now() - 86400000 * 6).toISOString()
-  },
-  {
-    id: 'exp-9',
-    amount: 320,
-    category: 'Transportation',
-    description: 'Rapido Bike Rides (Weekly)',
-    merchant: 'Rapido',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(7),
-    createdAt: new Date(Date.now() - 86400000 * 7).toISOString()
-  },
-  {
-    id: 'exp-10',
-    amount: 1200,
-    category: 'Bills & Utilities',
-    description: 'Airtel Broadband Fiber Recharge',
-    merchant: 'Airtel',
-    paymentMethod: 'UPI',
-    date: getRelativeDate(8),
-    createdAt: new Date(Date.now() - 86400000 * 8).toISOString()
-  }
-];
+// Initial transactions dataset (Starts completely clean with 0 transactions)
+const INITIAL_TRANSACTIONS: Expense[] = [];
 
 export class ExpenseService {
   public static getExpenses(): Expense[] {
@@ -196,6 +88,12 @@ export class ExpenseService {
       console.error('Failed to parse expenses from localStorage', e);
       return INITIAL_TRANSACTIONS;
     }
+  }
+
+  public static clearAllData(): Expense[] {
+    localStorage.removeItem(EXPENSES_STORAGE_KEY);
+    this.saveExpenses([]);
+    return [];
   }
 
   public static saveExpenses(expenses: Expense[]): void {

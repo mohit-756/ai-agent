@@ -8,9 +8,12 @@ import { ExpensesView } from './components/ExpensesView';
 import { BudgetsView } from './components/BudgetsView';
 import { AIAssistantView } from './components/AIAssistantView';
 import { PeerBalancesView } from './components/PeerBalancesView';
+import { AuthModal } from './components/AuthModal';
+import type { UserSession } from './components/AuthModal';
 import { PeerService } from './services/peerService';
 import { ExpenseService } from './services/expenseService';
 import { BudgetService } from './services/budgetService';
+import { MemoryService } from './services/memoryService';
 import { AIFinanceService } from './services/aiFinanceService';
 import type { Expense, Budget } from './types/expense';
 import { CheckCircle2, X } from 'lucide-react';
@@ -20,7 +23,19 @@ export function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [pendingPeersCount, setPendingPeersCount] = useState<number>(0);
-  
+
+  // User Auth State
+  const [userSession, setUserSession] = useState<UserSession | null>(() => {
+    try {
+      const stored = localStorage.getItem('spendwise_user_session');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => !userSession);
+
   // Theme state: neon (default) or mono (black & white minimalist)
   const [theme, setTheme] = useState<'neon' | 'mono'>(() => {
     return (localStorage.getItem('spendwise-theme') as 'neon' | 'mono') || 'neon';
@@ -97,14 +112,28 @@ export function App() {
     }
   };
 
-  const handleResetDemoData = () => {
-    if (window.confirm('Reset all expense and peer data to original demo dataset?')) {
-      const reset = ExpenseService.resetDemoData();
-      setExpenses(reset);
-      PeerService.resetDemoData();
+  const handleClearAllData = () => {
+    if (window.confirm('Clear all recorded expenses, peer records, and memories to start completely fresh?')) {
+      ExpenseService.clearAllData();
+      PeerService.clearAllData();
+      MemoryService.clearAllData();
+      setExpenses([]);
       handleUpdatePeerMetrics();
-      showToast('Reset to demo dataset');
+      showToast('All data cleared completely!');
     }
+  };
+
+  const handleLoginSuccess = (session: UserSession) => {
+    setUserSession(session);
+    setIsAuthModalOpen(false);
+    showToast(`Welcome ${session.name}!`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('spendwise_user_session');
+    setUserSession(null);
+    setIsAuthModalOpen(true);
+    showToast('Signed out of SpendWise');
   };
 
   const handleOpenAddModal = () => {
@@ -150,7 +179,10 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenAddModal={handleOpenAddModal}
-        onResetDemoData={handleResetDemoData}
+        onClearAllData={handleClearAllData}
+        userSession={userSession}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
         totalExpensesCount={expenses.length}
         unreadInsightsCount={insightsCount}
         pendingPeersCount={pendingPeersCount}
@@ -212,6 +244,13 @@ export function App() {
         )}
 
       </main>
+
+      {/* Login & Auth Dialog Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Add / Edit Expense Modal Dialog */}
       <ExpenseModal
