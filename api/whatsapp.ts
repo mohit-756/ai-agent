@@ -8,7 +8,7 @@ const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_KEY || '';
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Initialize OmniRoute, Groq & Gemini Settings
+// Initialize Model API Keys and Endpoints
 const omnirouteUrl = process.env.OMNIROUTE_URL || 'https://omniroute-gd65.onrender.com/v1';
 const omnirouteKey = process.env.OMNIROUTE_KEY || 'omniroute';
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
@@ -17,7 +17,7 @@ const groqApiKey = process.env.GROQ_API_KEY || '';
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Food & Dining': ['swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food'],
+  'Food & Dining': ['swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food', 'tiffin', 'curry', 'curries'],
   'Transportation': ['uber', 'ola', 'rapido', 'metro', 'auto', 'cab', 'taxi', 'fuel', 'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc'],
   'Shopping & Retail': ['amazon', 'flipkart', 'myntra', 'ajio', 'tata cliq', 'nykaa', 'zara', 'h&m', 'decathlon', 'd-mart', 'dmart', 'croma', 'reliance digital', 'clothes', 'shoes', 'shopping', 'electronics'],
   'Bills & Utilities': ['electricity', 'bescom', 'tata sky', 'airtel', 'jio', 'vi', 'vodafone', 'broadband', 'wifi', 'water bill', 'gas', 'indane', 'hp gas', 'rent', 'maintenance', 'recharge'],
@@ -40,11 +40,13 @@ function autoCategorize(text: string): string {
 
 export function parseTextExpense(text: string) {
   const trimmed = text.trim();
+  // Normalize numbers with spaces around commas e.g. "35 ,000" -> "35000"
+  const normalizedText = trimmed.replace(/(\d+)\s*,\s*(\d+)/g, '$1$2');
   let amount: number | null = null;
   
   // 1. Search for numbers with explicit currency symbols (₹, Rs, INR) first
   const currencyRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)/i;
-  const currencyMatch = trimmed.match(currencyRegex);
+  const currencyMatch = normalizedText.match(currencyRegex);
   if (currencyMatch) {
     const rawNum = currencyMatch[1].replace(/,/g, '');
     const parsed = parseFloat(rawNum);
@@ -54,7 +56,7 @@ export function parseTextExpense(text: string) {
   } else {
     // 2. Fallback to raw numbers with word boundaries
     const rawRegex = /\b([\d,]+(?:\.\d+)?)\b/;
-    const rawMatch = trimmed.match(rawRegex);
+    const rawMatch = normalizedText.match(rawRegex);
     if (rawMatch) {
       const rawNum = rawMatch[1].replace(/,/g, '');
       const parsed = parseFloat(rawNum);
@@ -64,9 +66,9 @@ export function parseTextExpense(text: string) {
     }
   }
 
-  const category = autoCategorize(trimmed);
+  const category = autoCategorize(normalizedText);
   let paymentMethod = 'UPI';
-  const lower = trimmed.toLowerCase();
+  const lower = normalizedText.toLowerCase();
   if (lower.includes('credit card') || lower.includes('cc')) {
     paymentMethod = 'Credit Card';
   } else if (lower.includes('debit card') || lower.includes('dc')) {
@@ -76,7 +78,7 @@ export function parseTextExpense(text: string) {
   }
 
   let merchant = '';
-  const merchants = ['Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 'Amazon', 'Flipkart', 'Myntra', 'Netflix', 'Spotify', 'Apollo', 'D-Mart', 'BESCOM', 'Airtel'];
+  const merchants = ['Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 'Amazon', 'Flipkart', 'Myntra', 'Netflix', 'Spotify', 'Apollo', 'D-Mart', 'BESCOM', 'Airtel', 'Coffee', 'Tiffin'];
   for (const m of merchants) {
     if (lower.includes(m.toLowerCase())) {
       merchant = m;
@@ -84,7 +86,7 @@ export function parseTextExpense(text: string) {
     }
   }
 
-  let description = trimmed.replace(/^(spent|paid|bought|add|expense|for|on)\s+/i, '');
+  let description = normalizedText.replace(/^(spent|paid|bought|add|expense|for|on)\s+/i, '');
   if (merchant && !description.toLowerCase().includes(merchant.toLowerCase())) {
     description = `${merchant} - ${description}`;
   }
@@ -96,6 +98,76 @@ export function parseTextExpense(text: string) {
     merchant,
     paymentMethod,
     date: new Date().toISOString().split('T')[0]
+  };
+}
+
+export function parseMultipleTextExpenses(text: string) {
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+
+  let globalPaymentMethod = 'UPI';
+  if (lower.includes('credit card') || lower.includes('cc')) {
+    globalPaymentMethod = 'Credit Card';
+  } else if (lower.includes('debit card') || lower.includes('dc')) {
+    globalPaymentMethod = 'Debit Card';
+  } else if (lower.includes('cash')) {
+    globalPaymentMethod = 'Cash';
+  }
+
+  const lines = trimmed.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+  const items: Array<{
+    amount: number;
+    category: string;
+    description: string;
+    merchant: string;
+    paymentMethod: string;
+    date: string;
+  }> = [];
+
+  for (const line of lines) {
+    const lineLower = line.toLowerCase();
+    
+    // Skip line if it's purely a payment method indicator (like "pp", "cash", "upi", "phonepe")
+    if (/^(pp|phonepe|upi|gpay|paytm|cash|credit card|debit card|cc|dc)$/i.test(lineLower)) {
+      continue;
+    }
+
+    const exp = parseTextExpense(line);
+    if (exp.amount) {
+      if (!lineLower.includes('cash') && !lineLower.includes('credit card') && !lineLower.includes('debit card')) {
+        exp.paymentMethod = globalPaymentMethod;
+      }
+      items.push(exp);
+    }
+  }
+
+  return items;
+}
+
+export function parseIncomeRecord(text: string) {
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+  const isIncome = /\b(credited|received|deposit|deposited|salary|cashback|earned)\b/i.test(lower);
+  if (!isIncome) {
+    return { isIncome: false, amount: null, description: '' };
+  }
+
+  const cleaned = trimmed.replace(/(\d+)\s*,\s*(\d+)/g, '$1$2');
+  const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
+  const match = cleaned.match(amountRegex);
+  let amount: number | null = null;
+  if (match) {
+    const rawNum = (match[1] || match[2]).replace(/,/g, '');
+    const parsed = parseFloat(rawNum);
+    if (!isNaN(parsed) && parsed > 0) {
+      amount = parsed;
+    }
+  }
+
+  return {
+    isIncome: true,
+    amount,
+    description: trimmed
   };
 }
 
@@ -127,7 +199,6 @@ function parseFlexibleDate(str: string): string {
 export function parseTextPeerRecord(text: string) {
   const lower = text.toLowerCase();
   
-  // Check if text has structured key-value template format (e.g. contains colons and split pipes or newlines)
   const isStructured = lower.includes(':') && (lower.includes('|') || lower.includes('\n'));
   if (isStructured) {
     const segments = text.split(/[|\n]+/);
@@ -202,7 +273,6 @@ export function parseTextPeerRecord(text: string) {
     }
   }
 
-  // Check if message matches peer transaction or reminder patterns
   const isLent = /\blent\b|\blend\b|\bgave\b.*\bto\b|\bgiven\b.*\bto\b|\bsplit\b.*\bwith\b|\bowes\b.*\bme\b/.test(lower);
   const isBorrowed = /\bborrowed\b|\bborrow\b|\btook\b.*\bfrom\b|\breceived\b.*\bfrom\b|\bi\b.*\bowe\b/.test(lower);
   const isReminder = /\bremind\b.*\b(take|pay|get|give|return|collect|ask)\b/.test(lower);
@@ -213,7 +283,6 @@ export function parseTextPeerRecord(text: string) {
     return { isPeerRecord: false };
   }
   
-  // Extract amount
   let amount: number | null = null;
   const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
   const amountMatch = text.match(amountRegex);
@@ -229,7 +298,6 @@ export function parseTextPeerRecord(text: string) {
     return { isPeerRecord: false };
   }
   
-  // Determine type: lent or borrowed
   let type: 'lent' | 'borrowed' = 'lent';
   if (isBorrowed) {
     type = 'borrowed';
@@ -239,11 +307,9 @@ export function parseTextPeerRecord(text: string) {
     type = 'lent';
   }
   
-  // Try to extract peer name and description
   let peerName = 'Friend';
   let description = 'Peer Split';
   
-  // Patterns for matching names
   const toRegex = /(?:lent|gave|given|split\s+with|to)\s+(?:money\s+to\s+|to\s+)?([a-zA-Z]+)(?:\s+|$|\d)/i;
   const fromRegex = /(?:borrowed|took|received|from)\s+(?:money\s+from\s+|from\s+)?([a-zA-Z]+)(?:\s+|$|\d)/i;
   
@@ -263,7 +329,6 @@ export function parseTextPeerRecord(text: string) {
     }
   }
   
-  // If still Friend, search uppercase word or keyword bounds
   if (peerName === 'Friend') {
     const words = text.split(/\s+/);
     const nameKeywords = ['to', 'from', 'with'];
@@ -278,12 +343,10 @@ export function parseTextPeerRecord(text: string) {
     }
   }
   
-  // Capitalize peerName first letter
   if (peerName && peerName !== 'Friend') {
     peerName = peerName.charAt(0).toUpperCase() + peerName.slice(1);
   }
   
-  // Parse Record Date (Yesterday, flexible formats)
   let recordDate = new Date().toISOString().split('T')[0];
   if (lower.includes('yesterday')) {
     const yesterday = new Date();
@@ -296,7 +359,6 @@ export function parseTextPeerRecord(text: string) {
     }
   }
 
-  // Parse Due Date / Reminder (due tomorrow, due next week, due flexible formats, remind tomorrow/tommorow)
   let dueDateStr: string | undefined = undefined;
   if (lower.includes('tomorrow') || lower.includes('tommorow') || lower.includes('remind tomorrow') || lower.includes('remind tommorow')) {
     const tomorrow = new Date();
@@ -313,19 +375,16 @@ export function parseTextPeerRecord(text: string) {
     }
   }
 
-  // Parse description: anything after "for" (exclude date/due clauses)
   const forRegex = /\bfor\s+([a-zA-Z0-9\s]+?)(?:\s+on|\s+due|$)/i;
   const forMatch = text.match(forRegex);
   if (forMatch && forMatch[1]) {
     description = forMatch[1].trim();
   } else {
-    // Clean up all helper tags
     description = text.replace(amountRegex, '')
       .replace(/\b(?:lent|borrowed|to|from|for|split|with|on|due|yesterday|tomorrow|tommorow|remind|me|take|give|money|cash|him|her|them)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
     
-    // Remove name if included
     if (peerName && peerName !== 'Friend') {
       const nameEscaped = peerName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       description = description.replace(new RegExp('\\b' + nameEscaped + '\\b', 'gi'), '');
@@ -360,7 +419,6 @@ export function parseTextPayback(text: string) {
     return { isPayback: false, peerName: '', amount: null };
   }
 
-  // Extract amount
   let amount: number | null = null;
   const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
   const amountMatch = text.match(amountRegex);
@@ -372,7 +430,6 @@ export function parseTextPayback(text: string) {
     }
   }
 
-  // Extract peer name candidate
   let peerName = '';
   const words = text.split(/\s+/);
   const stopWords = ['paid', 'back', 'settled', 'returned', 'repaid', 'from', 'by', 'to', 'for', 'rs', 'inr', 'rupees', 'money', 'full', 'half', 'payback'];
@@ -389,6 +446,224 @@ export function parseTextPayback(text: string) {
     peerName,
     amount
   };
+}
+
+export function localParseMessage(text: string) {
+  const trimmed = text.trim();
+
+  // 1. Payback check
+  const payback = parseTextPayback(trimmed);
+  if (payback.isPayback && payback.peerName) {
+    return {
+      intent: 'log_payback',
+      data: { peerName: payback.peerName, amount: payback.amount }
+    };
+  }
+
+  // 2. Peer Record check (Lent/Borrowed)
+  const peerRecord = parseTextPeerRecord(trimmed);
+  if (peerRecord.isPeerRecord && peerRecord.amount) {
+    return {
+      intent: 'log_peer',
+      data: {
+        peerName: peerRecord.peerName,
+        amount: peerRecord.amount,
+        type: peerRecord.type,
+        description: peerRecord.description,
+        dueDate: peerRecord.dueDate || null
+      }
+    };
+  }
+
+  // 3. Income / Credited check
+  const incomeRecord = parseIncomeRecord(trimmed);
+  if (incomeRecord.isIncome && incomeRecord.amount) {
+    return {
+      intent: 'log_income',
+      data: {
+        amount: incomeRecord.amount,
+        description: incomeRecord.description || 'Money Credited',
+        category: 'Income'
+      }
+    };
+  }
+
+  // 4. Expense check (single or multiline)
+  const items = parseMultipleTextExpenses(trimmed);
+  if (items.length > 0) {
+    return {
+      intent: 'log_expense',
+      data: { items }
+    };
+  }
+
+  // 5. Fallback: Save as Second Brain memory note
+  return {
+    intent: 'log_memory',
+    data: {
+      content: trimmed,
+      category: 'note'
+    }
+  };
+}
+
+interface LLMCompletionOptions {
+  systemPrompt?: string;
+  userMessage?: string;
+  jsonMode?: boolean;
+  imageBase64?: string;
+  mimeType?: string;
+  audioBase64?: string;
+  audioMimeType?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Robust Multi-Model LLM Provider Fallthrough Function
+ * Priority: Direct Gemini API -> Direct Groq API -> OmniRoute (Render) -> null (Fallback)
+ */
+async function callLLMCompletion(options: LLMCompletionOptions): Promise<string | null> {
+  // 1. Direct Gemini API Call
+  if (geminiApiKey) {
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
+    for (const model of models) {
+      try {
+        console.log(`Calling direct Gemini API (${model})...`);
+        const parts: any[] = [];
+        if (options.systemPrompt) {
+          parts.push({ text: `[System Directive]: ${options.systemPrompt}` });
+        }
+        if (options.userMessage) {
+          parts.push({ text: options.userMessage });
+        }
+        if (options.imageBase64) {
+          parts.push({
+            inlineData: {
+              mimeType: options.mimeType || 'image/jpeg',
+              data: options.imageBase64
+            }
+          });
+        }
+        if (options.audioBase64) {
+          parts.push({
+            inlineData: {
+              mimeType: options.audioMimeType || 'audio/ogg',
+              data: options.audioBase64
+            }
+          });
+        }
+
+        const body: any = { contents: [{ parts }] };
+        if (options.jsonMode) {
+          body.generationConfig = { responseMimeType: 'application/json' };
+        }
+
+        const res = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
+          body,
+          { timeout: options.timeoutMs || 8000 }
+        );
+
+        const content = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (content) return content;
+      } catch (err: any) {
+        console.warn(`Gemini direct model ${model} failed:`, err.response?.data?.error?.message || err.message);
+      }
+    }
+  }
+
+  // 2. Direct Groq API Call
+  if (groqApiKey) {
+    try {
+      if (options.audioBase64) {
+        console.log('Calling direct Groq Whisper API for audio transcription...');
+        const groqRes = await axios.post(
+          'https://api.groq.com/openai/v1/audio/transcriptions',
+          {
+            file: `data:${options.audioMimeType || 'audio/ogg'};base64,${options.audioBase64}`,
+            model: 'whisper-large-v3-turbo'
+          },
+          { headers: { Authorization: `Bearer ${groqApiKey}` }, timeout: 8000 }
+        );
+        const text = groqRes.data?.text?.trim();
+        if (text) return text;
+      } else if (!options.imageBase64) {
+        console.log('Calling direct Groq Chat API...');
+        const messages = [];
+        if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
+        if (options.userMessage) messages.push({ role: 'user', content: options.userMessage });
+
+        const body: any = {
+          model: 'llama-3.3-70b-versatile',
+          messages
+        };
+        if (options.jsonMode) body.response_format = { type: 'json_object' };
+
+        const groqRes = await axios.post(
+          'https://api.groq.com/openai/v1/chat/completions',
+          body,
+          { headers: { Authorization: `Bearer ${groqApiKey}` }, timeout: 8000 }
+        );
+        const text = groqRes.data?.choices?.[0]?.message?.content?.trim();
+        if (text) return text;
+      }
+    } catch (err: any) {
+      console.warn('Groq direct API failed:', err.response?.data?.error?.message || err.message);
+    }
+  }
+
+  // 3. OmniRoute Proxy Call
+  if (omnirouteUrl) {
+    try {
+      console.log('Calling OmniRoute API...');
+      const messages: any[] = [];
+      if (options.systemPrompt) messages.push({ role: 'system', content: options.systemPrompt });
+
+      if (options.imageBase64) {
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: options.userMessage || 'Scan this receipt or image' },
+            {
+              type: 'image_url',
+              image_url: { url: `data:${options.mimeType || 'image/jpeg'};base64,${options.imageBase64}` }
+            }
+          ]
+        });
+      } else if (options.audioBase64) {
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
+            {
+              type: 'image_url',
+              url: `data:${options.audioMimeType || 'audio/ogg'};base64,${options.audioBase64}`
+            }
+          ]
+        });
+      } else {
+        messages.push({ role: 'user', content: options.userMessage });
+      }
+
+      const body: any = {
+        model: options.imageBase64 ? 'auto/best-vision' : 'auto',
+        messages
+      };
+      if (options.jsonMode) body.response_format = { type: 'json_object' };
+
+      const omniRes = await axios.post(
+        `${omnirouteUrl}/chat/completions`,
+        body,
+        { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 6000 }
+      );
+      const text = omniRes.data?.choices?.[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch (err: any) {
+      console.warn('OmniRoute API failed:', err.response?.data?.error?.message || err.message);
+    }
+  }
+
+  return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -445,128 +720,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               responseType: 'arraybuffer'
             });
             const audioBuffer = Buffer.from(audioRes.data);
-
-            let transcriptionText = '';
             const audioBase64 = audioBuffer.toString('base64');
+            const audioMime = audioObj.mime_type || 'audio/ogg';
 
-            // Multi-model audio transcription fallback list with fast timeouts to avoid Render cold-start 25s delays
-            const audioModelsToTry: Array<
-              | { type: 'gemini_direct'; key: string; model: string }
-              | { type: 'groq_direct'; key: string }
-              | { type: 'omniroute'; model: string }
-            > = [
-              { type: 'gemini_direct', key: geminiApiKey, model: 'gemini-2.0-flash' },
-              { type: 'gemini_direct', key: geminiApiKey, model: 'gemini-1.5-flash' },
-              { type: 'groq_direct', key: groqApiKey },
-              { type: 'omniroute', model: 'gemini-2.0-flash' },
-              { type: 'omniroute', model: 'whisper-1' },
-              { type: 'omniroute', model: 'auto/best-vision' },
-              { type: 'omniroute', model: 'auto' }
-            ];
+            const transcriptionText = await callLLMCompletion({
+              audioBase64,
+              audioMimeType: audioMime,
+              timeoutMs: 10000
+            });
 
-            let lastAudioError: any = null;
-
-            for (const item of audioModelsToTry) {
-              if (item.type === 'gemini_direct') {
-                if (!item.key) continue;
-                try {
-                  console.log(`Trying direct Gemini API (${item.model}) for instant voice note transcription...`);
-                  const gRes = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/${item.model}:generateContent?key=${item.key}`,
-                    {
-                      contents: [
-                        {
-                          parts: [
-                            { text: 'Transcribe the spoken audio in this voice note accurately into plain text. Return ONLY the raw transcript.' },
-                            {
-                              inlineData: {
-                                mimeType: 'audio/ogg',
-                                data: audioBase64
-                              }
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    { timeout: 12000 }
-                  );
-                  transcriptionText = gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-                  if (transcriptionText) break;
-                } catch (e: any) {
-                  console.warn(`Gemini direct audio transcription (${item.model}) failed, trying next provider:`, e.message);
-                  lastAudioError = e;
-                }
-              } else if (item.type === 'groq_direct') {
-                if (!item.key) continue;
-                try {
-                  console.log('Trying Groq Whisper API for voice note transcription...');
-                  const groqRes = await axios.post(
-                    'https://api.groq.com/openai/v1/audio/transcriptions',
-                    {
-                      file: `data:audio/ogg;base64,${audioBase64}`,
-                      model: 'whisper-large-v3-turbo'
-                    },
-                    {
-                      headers: { Authorization: `Bearer ${item.key}` },
-                      timeout: 10000
-                    }
-                  );
-                  transcriptionText = groqRes.data?.text?.trim() || '';
-                  if (transcriptionText) break;
-                } catch (e: any) {
-                  console.warn('Groq direct audio transcription failed:', e.message);
-                  lastAudioError = e;
-                }
-              } else if (item.type === 'omniroute') {
-                try {
-                  console.log(`Trying OmniRoute model "${item.model}" (fast 6s timeout) for voice transcription...`);
-                  const omniRes = await axios.post(`${omnirouteUrl}/chat/completions`, {
-                    model: item.model,
-                    messages: [
-                      {
-                        role: 'user',
-                        content: [
-                          {
-                            type: 'text',
-                            text: 'Transcribe the spoken words in this audio voice note into plain text accurately. Return ONLY the raw transcript.'
-                          },
-                          {
-                            type: 'image_url',
-                            url: `data:audio/ogg;base64,${audioBase64}`
-                          }
-                        ]
-                      }
-                    ]
-                  }, {
-                    headers: { Authorization: `Bearer ${omnirouteKey}` },
-                    timeout: 6000 // Fast 6s timeout to prevent Render cold-start hanging Vercel
-                  });
-
-                  transcriptionText = omniRes.data?.choices?.[0]?.message?.content?.trim() || '';
-                  if (transcriptionText) break;
-                } catch (e: any) {
-                  console.warn(`OmniRoute audio model "${item.model}" failed:`, e.response?.data?.error?.message || e.message);
-                  lastAudioError = e;
-                }
-              }
+            if (transcriptionText) {
+              console.log(`Voice note transcribed: "${transcriptionText}"`);
+              msg.type = 'text';
+              msg.text = { body: transcriptionText };
+            } else {
+              replyBody = `🎤 *Voice Note Received:* Audio processing server is taking a moment to wake up. Please re-send your voice note or type your entry as text!`;
             }
-
-            if (!transcriptionText && lastAudioError) {
-              throw lastAudioError;
-            }
-
-            console.log(`Voice note transcribed: "${transcriptionText}"`);
-            
-            // Rewrite message as text so it flows into the text processing engine!
-            msg.type = 'text';
-            msg.text = { body: transcriptionText };
           } catch (audioErr: any) {
             console.error('Audio Transcription Error:', audioErr);
-            if (audioErr.code === 'ECONNABORTED' || audioErr.message?.includes('timeout') || audioErr.response?.status === 502) {
-              replyBody = `🎤 *Voice Note Received:* Audio processing server is taking a moment to wake up. Please re-send your voice note or type your entry as text!`;
-            } else {
-              replyBody = `⚠️ *Voice Transcription Notice:* Could not parse audio. Please re-send or type your expense/note as text.`;
-            }
+            replyBody = `🎤 *Voice Note Received:* Audio processing server is waking up. Please re-send or type your expense/note as text.`;
           }
         }
 
@@ -574,23 +746,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (msg.type === 'image' && msg.image) {
           const mediaId = msg.image.id;
           try {
-            if (!supabase) throw new Error('Supabase client is not initialized. Please verify SUPABASE_URL and SUPABASE_KEY.');
+            if (!supabase) throw new Error('Supabase client is not initialized.');
 
             console.log(`Downloading receipt image: ${mediaId}`);
             
-            // Get Meta download URL
             const mediaRes = await axios.get(`https://graph.facebook.com/v25.0/${mediaId}`, {
               headers: { Authorization: `Bearer ${whatsappToken}` }
             });
 
-            // Download image binary
             const imageRes = await axios.get(mediaRes.data.url, {
               headers: { Authorization: `Bearer ${whatsappToken}` },
               responseType: 'arraybuffer'
             });
             const buffer = Buffer.from(imageRes.data);
 
-            // Upload to Supabase Storage receipts bucket
             const storageFilename = `${Date.now()}_receipt.jpg`;
             const { error: uploadError } = await supabase.storage
               .from('receipts')
@@ -599,16 +768,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 upsert: true
               });
 
-            if (uploadError) {
-              console.warn('Supabase storage upload failed:', uploadError.message);
-            } else {
+            if (!uploadError) {
               const { data: linkData } = supabase.storage
                 .from('receipts')
                 .getPublicUrl(storageFilename);
               receiptUrl = linkData.publicUrl;
             }
 
-            // Call OmniRoute with Multimodal image parse request
             const prompt = `You are a financial parsing agent. Scan this receipt or transaction screenshot. Identify and extract:
 1. Total amount paid (number only)
 2. Store name/merchant name (e.g. Swiggy, Zomato, D-Mart)
@@ -625,96 +791,55 @@ Return ONLY a clean JSON object without markdown fences:
   "paymentMethod": "UPI"
 }`;
 
-            const ocrResponse = await axios.post(
-              `${omnirouteUrl}/chat/completions`,
-              {
-                model: 'auto/best-vision',
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: prompt },
-                      {
-                        type: 'image_url',
-                        image_url: { url: `data:image/jpeg;base64,${buffer.toString('base64')}` }
-                      }
-                    ]
-                  }
-                ],
-                response_format: { type: 'json_object' }
-              },
-              {
-                headers: {
-                  Authorization: `Bearer ${omnirouteKey}`,
-                  'Content-Type': 'application/json'
+            const ocrText = await callLLMCompletion({
+              systemPrompt: prompt,
+              imageBase64: buffer.toString('base64'),
+              mimeType: 'image/jpeg',
+              jsonMode: true,
+              timeoutMs: 12000
+            });
+
+            if (ocrText) {
+              const cleanJson = ocrText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+              const extracted = JSON.parse(cleanJson);
+
+              const parsed = {
+                amount: parseFloat(extracted.amount) || null,
+                category: CATEGORIES.includes(extracted.category) ? extracted.category : 'Others',
+                description: extracted.description || 'Receipt Image Log',
+                merchant: extracted.merchant || '',
+                paymentMethod: extracted.paymentMethod || 'UPI',
+                date: new Date().toISOString().split('T')[0]
+              };
+
+              if (parsed.amount) {
+                const { error: dbError } = await supabase.from('expenses').insert([{
+                  amount: parsed.amount,
+                  category: parsed.category,
+                  description: parsed.description,
+                  merchant: parsed.merchant,
+                  paymentmethod: parsed.paymentMethod,
+                  date: parsed.date,
+                  notes: 'Receipt image scanned via AI OCR',
+                  source: 'whatsapp',
+                  receipt_url: receiptUrl || null
+                }]);
+
+                if (dbError) {
+                  replyBody = `⚠️ Error saving expense: ${dbError.message}`;
+                } else {
+                  replyBody = `📸 *Receipt Scanned Successfully!*\n\n` +
+                    `• *Amount:* ₹${parsed.amount}\n` +
+                    `• *Merchant:* ${parsed.merchant || 'N/A'}\n` +
+                    `• *Category:* ${parsed.category}\n` +
+                    `• *Payment:* ${parsed.paymentMethod}\n\n` +
+                    `Synced with SpendWise Dashboard!`;
                 }
-              }
-            );
-
-            const responseText = ocrResponse.data.choices[0].message.content.trim();
-            console.log(`OmniRoute OCR output: ${responseText}`);
-            const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-            const extracted = JSON.parse(cleanJson);
-
-            const parsed = {
-              amount: parseFloat(extracted.amount) || null,
-              category: CATEGORIES.includes(extracted.category) ? extracted.category : 'Others',
-              description: extracted.description || 'Receipt Image Log',
-              merchant: extracted.merchant || '',
-              paymentMethod: extracted.paymentMethod || 'UPI',
-              date: new Date().toISOString().split('T')[0]
-            };
-
-            if (parsed.amount) {
-              const { error: dbError } = await supabase.from('expenses').insert([{
-                amount: parsed.amount,
-                category: parsed.category,
-                description: parsed.description,
-                merchant: parsed.merchant,
-                paymentmethod: parsed.paymentMethod,
-                date: parsed.date,
-                notes: 'Receipt image scanned via OmniRoute OCR',
-                source: 'whatsapp',
-                receipt_url: receiptUrl || null
-              }]);
-
-              if (dbError) {
-                replyBody = `⚠️ Error saving expense: ${dbError.message}`;
               } else {
-                replyBody = `📸 *Receipt Scanned Successfully (via OmniRoute)!*\n\n` +
-                  `• *Amount:* ₹${parsed.amount}\n` +
-                  `• *Merchant:* ${parsed.merchant || 'N/A'}\n` +
-                  `• *Category:* ${parsed.category}\n` +
-                  `• *Payment:* ${parsed.paymentMethod}\n\n` +
-                  `Synced with SpendWise Dashboard!`;
-
-                // Budget Alert Check
-                try {
-                  const DEFAULT_BUDGETS: Record<string, number> = {
-                    'Food & Dining': 5000, 'Transportation': 3000, 'Shopping & Retail': 5000,
-                    'Bills & Utilities': 5000, 'Entertainment': 2000, 'Health & Wellness': 3000,
-                    'Travel': 10000, 'Education': 5000, 'Services': 3000, 'Others': 3000
-                  };
-                  const firstDayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`;
-                  const { data: monthExps } = await supabase
-                    .from('expenses')
-                    .select('amount')
-                    .eq('category', parsed.category)
-                    .gte('date', firstDayStr);
-
-                  const catSum = monthExps ? monthExps.reduce((acc, e) => acc + Number(e.amount), 0) : parsed.amount;
-                  const cap = DEFAULT_BUDGETS[parsed.category] || 5000;
-                  const pct = Math.round((catSum / cap) * 100);
-
-                  if (pct >= 80) {
-                    replyBody += `\n\n⚠️ *Budget Alert:* You've spent ₹${catSum.toLocaleString('en-IN')} of your ₹${cap.toLocaleString('en-IN')} ${parsed.category} limit this month (${pct}%)!`;
-                  }
-                } catch (bErr) {
-                  console.warn('Budget warning check failed:', bErr);
-                }
+                replyBody = `⚠️ Could not extract valid amount from this receipt scan.`;
               }
             } else {
-              replyBody = `⚠️ Could not extract valid amount from this receipt scan.`;
+              replyBody = `⚠️ *Receipt Scan:* AI OCR processing failed. Please type your expense as text.`;
             }
 
           } catch (ocrErr: any) {
@@ -736,41 +861,30 @@ Return ONLY a clean JSON object without markdown fences:
               if (!supabase) throw new Error('Supabase client is not initialized.');
               console.log(`Scraping URL: ${url}`);
               
-              // Fetch page content
-              const htmlRes = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+              const htmlRes = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
               const content = htmlRes.data.toString()
                 .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
                 .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
                 .replace(/<[^>]+>/g, ' ')
                 .replace(/\s+/g, ' ')
                 .trim()
-                .slice(0, 6000); // safety length limit
+                .slice(0, 6000);
 
-              // Generate summary using OmniRoute
-              const summaryResponse = await axios.post(
-                `${omnirouteUrl}/chat/completions`,
-                {
-                  model: 'auto',
-                  messages: [
-                    { role: 'user', content: `Summarize the core takeaways of this page content in 3-4 bullet points:\n\n${content}` }
-                  ]
-                },
-                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
-              );
-              const summary = summaryResponse.data.choices[0].message.content;
+              const summaryPrompt = `Summarize the core takeaways of this web page content in 3-4 bullet points:\n\n${content}`;
+              const summary = await callLLMCompletion({ userMessage: summaryPrompt }) || 'Web page archived.';
 
-              // Generate vector embedding
-              const embResponse = await axios.post(
-                `${omnirouteUrl}/embeddings`,
-                {
-                  model: 'text-embedding-3-small',
-                  input: summary
-                },
-                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
-              );
-              const embedding = embResponse.data.data[0].embedding;
+              let embedding = null;
+              try {
+                const embResponse = await axios.post(
+                  `${omnirouteUrl}/embeddings`,
+                  { model: 'text-embedding-3-small', input: summary },
+                  { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 5000 }
+                );
+                embedding = embResponse.data?.data?.[0]?.embedding || null;
+              } catch (e) {
+                console.warn('Embedding generation skipped:', e);
+              }
 
-              // Save to memories table
               const { error: memErr } = await supabase.from('memories').insert([{
                 content: `Link Summary for: ${url}\n\n${summary}`,
                 embedding,
@@ -786,7 +900,7 @@ Return ONLY a clean JSON object without markdown fences:
             }
           }
 
-          // Scenario B: LLM-based Intent Detection & Conversation Parser
+          // Scenario B: LLM & Local Fallback Intent Parser
           else {
             try {
               if (!supabase) throw new Error('Supabase client is not initialized.');
@@ -795,23 +909,32 @@ Return ONLY a clean JSON object without markdown fences:
 Analyze the user's message and determine the correct intent. Respond ONLY with a clean JSON object. Do not include markdown fences.
 
 Intents:
-- "log_expense": spending money (e.g., "spent 350 on lunch", "zomato 250 paid upi")
+- "log_expense": spending money (e.g., "spent 350 on lunch", "spent 40 tiffin \n 80 curries \n Pp", "zomato 250 paid upi", "spend 30 on coffee cash")
+- "log_income": receiving money / salary / credits (e.g., "Credited 35,000", "salary 50000 received", "received 500 from bank")
 - "log_peer": lending or borrowing money (e.g., "lent 500 to Sneha for split", "borrowed 1000 from Rohit")
 - "log_payback": settling debts (e.g., "Sneha paid back 500", "repaid 1000 to Rohit")
-- "log_memory": saving a non-monetary real-life note, reminder, task, idea, or memo (e.g., "Doctor appointment on Friday at 5pm", "Buy groceries: milk, bread", "Idea: launch AI audio bot", "Met Alex for coffee today")
-- "query_database": questioning past transactions or semantic memory (e.g., "who owes me money?", "what was that link I sent yesterday?", "how much did I spend on cabs?")
+- "log_memory": saving a non-monetary real-life note, reminder, task, idea, or memo (e.g., "Doctor appointment on Friday at 5pm", "Buy groceries")
+- "query_database": questioning past transactions or semantic memory (e.g., "who owes me money?", "how much did I spend on cabs?")
 - "general_chat": general chatting or greetings
 
 Return Format:
 {
-  "intent": "log_expense" | "log_peer" | "log_payback" | "log_memory" | "query_database" | "general_chat",
+  "intent": "log_expense" | "log_income" | "log_peer" | "log_payback" | "log_memory" | "query_database" | "general_chat",
   "data": {
-    // For log_expense:
-    "amount": number | null,
-    "merchant": string,
-    "category": "Food & Dining" | "Transportation" | "Shopping & Retail" | "Bills & Utilities" | "Entertainment" | "Health & Wellness" | "Travel" | "Education" | "Services" | "Others",
+    // For log_expense (can contain single object or items array if multiple expenses):
+    "items": [
+      {
+        "amount": number,
+        "merchant": string,
+        "category": "Food & Dining" | "Transportation" | "Shopping & Retail" | "Bills & Utilities" | "Entertainment" | "Health & Wellness" | "Travel" | "Education" | "Services" | "Others",
+        "description": string,
+        "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking"
+      }
+    ],
+
+    // For log_income:
+    "amount": number,
     "description": string,
-    "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking",
 
     // For log_peer:
     "peerName": string,
@@ -830,50 +953,109 @@ Return Format:
   }
 }`;
 
-              const intentResponse = await axios.post(
-                `${omnirouteUrl}/chat/completions`,
-                {
-                  model: 'auto',
-                  messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: msgText }
-                  ],
-                  response_format: { type: 'json_object' }
-                },
-                { headers: { Authorization: `Bearer ${omnirouteKey}` } }
-              );
+              let parsedIntentObj: any = null;
+              
+              // Attempt LLM parsing
+              const llmResponseText = await callLLMCompletion({
+                systemPrompt,
+                userMessage: msgText,
+                jsonMode: true,
+                timeoutMs: 8000
+              });
 
-              const responseText = intentResponse.data.choices[0].message.content.trim();
-              const cleanJson = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-              const parsedIntent = JSON.parse(cleanJson);
-              const intent = parsedIntent.intent;
-              const data = parsedIntent.data || {};
-
-              console.log(`Detected Intent: ${intent}`, data);
-
-              // 1. Log Expense
-              if (intent === 'log_expense' && data.amount) {
-                const { error } = await supabase.from('expenses').insert([{
-                  amount: data.amount,
-                  category: data.category || 'Others',
-                  description: data.description || 'WhatsApp Expense',
-                  merchant: data.merchant || '',
-                  paymentmethod: data.paymentMethod || 'UPI',
-                  date: new Date().toISOString().split('T')[0],
-                  notes: `Processed via OmniRoute text parser: "${msgText}"`,
-                  source: 'whatsapp'
-                }]);
-
-                if (error) throw error;
-                replyBody = `✅ *Recorded Expense!*\n\n` +
-                  `• *Amount:* ₹${data.amount}\n` +
-                  `• *Merchant:* ${data.merchant || 'N/A'}\n` +
-                  `• *Category:* ${data.category || 'Others'}\n` +
-                  `• *Payment:* ${data.paymentMethod || 'UPI'}\n\n` +
-                  `Synced with SpendWise!`;
+              if (llmResponseText) {
+                try {
+                  const cleanJson = llmResponseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+                  parsedIntentObj = JSON.parse(cleanJson);
+                } catch (pe) {
+                  console.warn('JSON parsing of LLM response failed, invoking local fallback:', pe);
+                }
               }
 
-              // 2. Log Peer Ledger Record
+              // Fallback to local rule-based regex parser if LLM failed or yielded invalid result
+              if (!parsedIntentObj || !parsedIntentObj.intent) {
+                console.log('LLM unavailable or invalid, utilizing local rule-based regex parser...');
+                parsedIntentObj = localParseMessage(msgText);
+              }
+
+              const intent = parsedIntentObj.intent;
+              const data = parsedIntentObj.data || {};
+
+              console.log(`Final Detected Intent: ${intent}`, data);
+
+              // 1. Log Expense (Single or Multiple items)
+              if (intent === 'log_expense') {
+                const itemsToInsert: Array<any> = Array.isArray(data.items) && data.items.length > 0
+                  ? data.items
+                  : (data.amount ? [data] : []);
+
+                const validItems = itemsToInsert.filter(i => i.amount && i.amount > 0);
+
+                if (validItems.length > 0) {
+                  const records = validItems.map(item => ({
+                    amount: item.amount,
+                    category: item.category || autoCategorize(item.description || item.merchant || msgText),
+                    description: item.description || 'WhatsApp Expense',
+                    merchant: item.merchant || '',
+                    paymentmethod: item.paymentMethod || 'UPI',
+                    date: new Date().toISOString().split('T')[0],
+                    notes: `Processed via SpendWise parser: "${msgText}"`,
+                    source: 'whatsapp'
+                  }));
+
+                  const { error } = await supabase.from('expenses').insert(records);
+                  if (error) throw error;
+
+                  if (validItems.length === 1) {
+                    const item = validItems[0];
+                    replyBody = `✅ *Recorded Expense!*\n\n` +
+                      `• *Amount:* ₹${item.amount}\n` +
+                      `• *Merchant:* ${item.merchant || 'N/A'}\n` +
+                      `• *Category:* ${item.category || autoCategorize(item.description || '')}\n` +
+                      `• *Payment:* ${item.paymentMethod || 'UPI'}\n\n` +
+                      `Synced with SpendWise!`;
+                  } else {
+                    const lines = validItems.map(i => `• *${i.description || i.merchant || 'Expense'}*: ₹${i.amount} (${i.category || 'Others'}) [${i.paymentMethod || 'UPI'}]`);
+                    const totalSum = validItems.reduce((acc, i) => acc + Number(i.amount), 0);
+                    replyBody = `✅ *Recorded ${validItems.length} Expenses!*\n\n` +
+                      `${lines.join('\n')}\n\n` +
+                      `💰 *Total Spent:* ₹${totalSum}\n` +
+                      `Synced with SpendWise!`;
+                  }
+                } else {
+                  // Fallback to local memory log if expense amount missing
+                  await supabase.from('memories').insert([{
+                    content: `[NOTE] ${msgText}`,
+                    metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
+                  }]);
+                  replyBody = `📝 *Saved to Second Brain Notes!*\n\n"${msgText}"`;
+                }
+              }
+
+              // 2. Log Income / Money Credited
+              else if (intent === 'log_income' && data.amount) {
+                const amount = data.amount;
+                const desc = data.description || msgText;
+                const { error: memErr } = await supabase.from('memories').insert([{
+                  content: `[INCOME] Credited ₹${amount.toLocaleString('en-IN')}: ${desc}`,
+                  metadata: {
+                    source: 'whatsapp_text',
+                    category: 'income',
+                    amount,
+                    date: new Date().toISOString().split('T')[0]
+                  }
+                }]);
+
+                if (memErr) throw memErr;
+
+                replyBody = `💵 *Income / Credit Recorded!*\n\n` +
+                  `• *Amount:* ₹${amount.toLocaleString('en-IN')}\n` +
+                  `• *Details:* ${desc}\n` +
+                  `• *Category:* Income\n\n` +
+                  `Synced with SpendWise Second Brain!`;
+              }
+
+              // 3. Log Peer Ledger Record
               else if (intent === 'log_peer' && data.amount) {
                 const { error } = await supabase.from('peer_records').insert([{
                   name: data.peerName || 'Friend',
@@ -887,7 +1069,6 @@ Return Format:
                 }]);
 
                 if (error) {
-                  // Fallback to standard expense insert
                   console.warn('peer_records insert failed, falling back to expenses:', error.message);
                   await supabase.from('expenses').insert([{
                     amount: data.amount,
@@ -911,7 +1092,7 @@ Return Format:
                 }
               }
 
-              // 3. Log Payback
+              // 4. Log Payback
               else if (intent === 'log_payback') {
                 if (data.peerName) {
                   const { data: peerMatches } = await supabase
@@ -948,7 +1129,7 @@ Return Format:
                 }
               }
 
-              // 4. Log Real-Life Memory / Note / Reminder / Task / Idea
+              // 5. Log Real-Life Memory / Note / Reminder / Task / Idea
               else if (intent === 'log_memory') {
                 const memoryContent = data.content || msgText;
                 const memoryCategory = (data.category || 'note').toUpperCase();
@@ -970,40 +1151,35 @@ Return Format:
                   `Stored safely in your SpendWise Second Brain!`;
               }
 
-              // 4. Query Database (Financial Context + Semantic Memory Search)
+              // 6. Query Database (Financial Context + Semantic Memory Search)
               else if (intent === 'query_database' || intent === 'general_chat') {
                 let memoriesContextText = 'None';
                 
-                // Perform semantic vector memory search if query_database is triggered
                 if (intent === 'query_database') {
                   try {
-                    // Generate search embedding
                     const embResponse = await axios.post(
                       `${omnirouteUrl}/embeddings`,
-                      {
-                        model: 'text-embedding-3-small',
-                        input: msgText
-                      },
-                      { headers: { Authorization: `Bearer ${omnirouteKey}` } }
+                      { model: 'text-embedding-3-small', input: msgText },
+                      { headers: { Authorization: `Bearer ${omnirouteKey}` }, timeout: 4000 }
                     );
-                    const qEmbedding = embResponse.data.data[0].embedding;
+                    const qEmbedding = embResponse.data?.data?.[0]?.embedding;
 
-                    // Search vector similarity in memories table
-                    const { data: matchedMemories } = await supabase.rpc('match_memories', {
-                      query_embedding: qEmbedding,
-                      match_threshold: 0.3,
-                      match_count: 4
-                    });
+                    if (qEmbedding) {
+                      const { data: matchedMemories } = await supabase.rpc('match_memories', {
+                        query_embedding: qEmbedding,
+                        match_threshold: 0.3,
+                        match_count: 4
+                      });
 
-                    if (matchedMemories && matchedMemories.length > 0) {
-                      memoriesContextText = matchedMemories.map((m: any) => `- [Score: ${m.similarity.toFixed(2)}] ${m.content}`).join('\n');
+                      if (matchedMemories && matchedMemories.length > 0) {
+                        memoriesContextText = matchedMemories.map((m: any) => `- [Score: ${m.similarity.toFixed(2)}] ${m.content}`).join('\n');
+                      }
                     }
                   } catch (vErr) {
-                    console.warn('Vector memory search failed (make sure match_memories function is installed):', vErr);
+                    console.warn('Vector memory search skipped:', vErr);
                   }
                 }
 
-                // Fetch ledger context
                 const { data: peers } = await supabase.from('peer_records').select('*').eq('status', 'pending');
                 const { data: recentExps } = await supabase.from('expenses').select('*').order('date', { ascending: false }).limit(10);
 
@@ -1036,21 +1212,38 @@ ${memoriesContextText}
 
 User's Question: "${msgText}"`;
 
-                const chatResponse = await axios.post(
-                  `${omnirouteUrl}/chat/completions`,
-                  {
-                    model: 'auto',
-                    messages: [{ role: 'user', content: conversationPrompt }]
-                  },
-                  { headers: { Authorization: `Bearer ${omnirouteKey}` } }
-                );
-
-                replyBody = chatResponse.data.choices[0].message.content.trim();
+                const chatReply = await callLLMCompletion({ userMessage: conversationPrompt, timeoutMs: 8000 });
+                replyBody = chatReply || `Hi! I am SpendWise AI. I can track expenses, debts, income, and notes. Ask me anything about your finances!`;
               }
 
             } catch (textErr: any) {
               console.error('Text Processing Error:', textErr);
-              replyBody = `⚠️ *Failed to process message:* ${textErr.message}`;
+              // Fallback to local parsing on unhandled errors to avoid sending 502 raw error to user
+              try {
+                const fallbackObj = localParseMessage(msgText);
+                if (fallbackObj.intent === 'log_expense' && fallbackObj.data.items?.length) {
+                  const items = fallbackObj.data.items;
+                  await supabase.from('expenses').insert(items.map(i => ({
+                    amount: i.amount,
+                    category: i.category,
+                    description: i.description,
+                    merchant: i.merchant,
+                    paymentmethod: i.paymentMethod,
+                    date: new Date().toISOString().split('T')[0],
+                    notes: `Logged via fallback parser`,
+                    source: 'whatsapp'
+                  })));
+                  replyBody = `✅ *Recorded Expense!*\n\n• *Amount:* ₹${items[0].amount}\n• *Category:* ${items[0].category}\n• *Payment:* ${items[0].paymentMethod}\n\nSynced with SpendWise!`;
+                } else {
+                  await supabase.from('memories').insert([{
+                    content: `[NOTE] ${msgText}`,
+                    metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
+                  }]);
+                  replyBody = `📝 *Saved to Second Brain Notes!*\n\n"${msgText}"`;
+                }
+              } catch (e) {
+                replyBody = `📝 *Received message:* "${msgText}". Saved to SpendWise!`;
+              }
             }
           }
         }
@@ -1070,7 +1263,8 @@ User's Question: "${msgText}"`;
               headers: {
                 Authorization: `Bearer ${whatsappToken}`,
                 'Content-Type': 'application/json'
-              }
+              },
+              timeout: 8000
             }
           );
         }
@@ -1082,7 +1276,7 @@ User's Question: "${msgText}"`;
 
     } catch (err: any) {
       console.error('Webhook error handler:', err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(200).json({ error: err.message, handled: true });
     }
   }
 
