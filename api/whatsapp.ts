@@ -133,11 +133,18 @@ export function parseMultipleTextExpenses(text: string) {
     }
 
     const exp = parseTextExpense(line);
-    if (exp.amount) {
+    if (exp.amount !== null) {
       if (!lineLower.includes('cash') && !lineLower.includes('credit card') && !lineLower.includes('debit card')) {
         exp.paymentMethod = globalPaymentMethod;
       }
-      items.push(exp);
+      items.push({
+        amount: exp.amount,
+        category: exp.category,
+        description: exp.description,
+        merchant: exp.merchant,
+        paymentMethod: exp.paymentMethod,
+        date: exp.date
+      });
     }
   }
 
@@ -1223,22 +1230,26 @@ User's Question: "${msgText}"`;
                 const fallbackObj = localParseMessage(msgText);
                 if (fallbackObj.intent === 'log_expense' && fallbackObj.data.items?.length) {
                   const items = fallbackObj.data.items;
-                  await supabase.from('expenses').insert(items.map(i => ({
-                    amount: i.amount,
-                    category: i.category,
-                    description: i.description,
-                    merchant: i.merchant,
-                    paymentmethod: i.paymentMethod,
-                    date: new Date().toISOString().split('T')[0],
-                    notes: `Logged via fallback parser`,
-                    source: 'whatsapp'
-                  })));
+                  if (supabase) {
+                    await supabase.from('expenses').insert(items.map(i => ({
+                      amount: i.amount,
+                      category: i.category,
+                      description: i.description,
+                      merchant: i.merchant,
+                      paymentmethod: i.paymentMethod,
+                      date: new Date().toISOString().split('T')[0],
+                      notes: `Logged via fallback parser`,
+                      source: 'whatsapp'
+                    })));
+                  }
                   replyBody = `✅ *Recorded Expense!*\n\n• *Amount:* ₹${items[0].amount}\n• *Category:* ${items[0].category}\n• *Payment:* ${items[0].paymentMethod}\n\nSynced with SpendWise!`;
                 } else {
-                  await supabase.from('memories').insert([{
-                    content: `[NOTE] ${msgText}`,
-                    metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
-                  }]);
+                  if (supabase) {
+                    await supabase.from('memories').insert([{
+                      content: `[NOTE] ${msgText}`,
+                      metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
+                    }]);
+                  }
                   replyBody = `📝 *Saved to Second Brain Notes!*\n\n"${msgText}"`;
                 }
               } catch (e) {
