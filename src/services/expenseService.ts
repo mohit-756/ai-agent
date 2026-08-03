@@ -8,20 +8,27 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
   'Food & Dining': [
     'swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 
     'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 
-    'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food'
+    'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food',
+    'tiffin', 'curry', 'curries', 'chicken', 'mutton', 'fish', 'meat', 'egg', 'eggs', 
+    'paneer', 'spices', 'spice', 'masala', 'chilli', 'chili', 'turmeric', 'salt', 'pepper', 
+    'oil', 'ghee', 'tomato', 'tomatoes', 'potato', 'potatoes', 'onion', 'onions', 
+    'vegetable', 'vegetables', 'veggies', 'veggie', 'fruit', 'fruits', 'apple', 'banana', 
+    'mango', 'milk', 'curd', 'butter', 'cheese', 'dahi', 'lassi', 'bread', 'rice', 
+    'dal', 'atta', 'flour', 'wheat', 'roti', 'naan', 'paratha', 'dosa', 'idli', 'snack', 
+    'snacks', 'biscuit', 'biscuits', 'chips', 'chocolate', 'sweets', 'sweet', 'ice cream'
   ],
   'Transportation': [
     'uber', 'ola', 'rapido', 'metro', 'namma metro', 'auto', 'cab', 'taxi', 'fuel', 
-    'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc'
+    'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc', 'flight'
   ],
   'Shopping & Retail': [
     'amazon', 'flipkart', 'myntra', 'ajio', 'tata cliq', 'nykaa', 'zara', 'h&m', 
     'decathlon', 'd-mart', 'dmart', 'croma', 'reliance digital', 'clothes', 'shoes', 
-    'shopping', 'electronics'
+    'shopping', 'electronics', 'dress', 'shirt', 'pants'
   ],
   'Bills & Utilities': [
     'electricity', 'bescom', 'tata sky', 'airtel', 'jio', 'vi', 'vodafone', 'broadband', 
-    'wifi', 'water bill', 'gas', 'indane', 'hp gas', 'rent', 'maintenance', 'recharge'
+    'wifi', 'water bill', 'gas', 'indane', 'hp gas', 'rent', 'maintenance', 'recharge', 'cylinder'
   ],
   'Entertainment': [
     'netflix', 'hotstar', 'prime video', 'spotify', 'youtube', 'bookmyshow', 'cinema', 
@@ -29,15 +36,15 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
   ],
   'Health & Wellness': [
     'apollo', '1mg', 'pharmeasy', 'pharmacy', 'hospital', 'doctor', 'clinic', 'cult.fit', 
-    'gym', 'fitness', 'medicines', 'lab test'
+    'gym', 'fitness', 'medicines', 'medicine', 'lab test'
   ],
   'Travel': [
     'makemytrip', 'goibibo', 'cleartrip', 'airbnb', 'hotel', 'flight', 'resort', 
-    'indigo', 'air india', 'stay', 'vacation'
+    'indigo', 'air india', 'stay', 'vacation', 'trip'
   ],
   'Education': [
     'udemy', 'coursera', 'books', 'stationery', 'school', 'college', 'tuition', 
-    'course', 'exam fee'
+    'course', 'exam fee', 'book'
   ],
   'Services': [
     'urban company', 'dry clean', 'laundry', 'salon', 'barber', 'spa', 'plumber', 'electrician'
@@ -49,7 +56,10 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
  * Heuristic Auto-Categorization
  */
 export function autoCategorize(text: string): Category {
-  const lower = text.toLowerCase();
+  let lower = text.toLowerCase();
+  // Normalize common typo prepositions: "dro" -> "for", "fro" -> "for", "fon" -> "for"
+  lower = lower.replace(/\b(dro|fro|fon|fo)\b/gi, 'for');
+
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some(keyword => lower.includes(keyword))) {
       return category as Category;

@@ -14,19 +14,56 @@ const geminiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_K
 const CATEGORIES = ['Food & Dining', 'Transportation', 'Shopping & Retail', 'Bills & Utilities', 'Entertainment', 'Health & Wellness', 'Travel', 'Education', 'Services', 'Others'];
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Food & Dining': ['swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food', 'tiffin', 'curry', 'curries'],
-  'Transportation': ['uber', 'ola', 'rapido', 'metro', 'auto', 'cab', 'taxi', 'fuel', 'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc'],
-  'Shopping & Retail': ['amazon', 'flipkart', 'myntra', 'ajio', 'tata cliq', 'nykaa', 'zara', 'h&m', 'decathlon', 'd-mart', 'dmart', 'croma', 'reliance digital', 'clothes', 'shoes', 'shopping', 'electronics'],
-  'Bills & Utilities': ['electricity', 'bescom', 'tata sky', 'airtel', 'jio', 'vi', 'vodafone', 'broadband', 'wifi', 'water bill', 'gas', 'indane', 'hp gas', 'rent', 'maintenance', 'recharge'],
-  'Entertainment': ['netflix', 'hotstar', 'prime video', 'spotify', 'youtube', 'bookmyshow', 'cinema', 'movie', 'gaming', 'steam', 'playstation', 'concert', 'event'],
-  'Health & Wellness': ['apollo', '1mg', 'pharmeasy', 'pharmacy', 'hospital', 'doctor', 'clinic', 'cult.fit', 'gym', 'fitness', 'medicines', 'lab test'],
-  'Travel': ['makemytrip', 'goibibo', 'cleartrip', 'airbnb', 'hotel', 'flight', 'resort', 'indigo', 'air india', 'stay', 'vacation'],
-  'Education': ['udemy', 'coursera', 'books', 'stationery', 'school', 'college', 'tuition', 'course', 'exam fee'],
-  'Services': ['urban company', 'dry clean', 'laundry', 'salon', 'barber', 'spa', 'plumber', 'electrician']
+  'Food & Dining': [
+    'swiggy', 'zomato', 'blinkit', 'instamart', 'zepto', 'dominos', 'pizza', 'mcdonalds', 
+    'starbucks', 'kfc', 'subway', 'lunch', 'dinner', 'breakfast', 'cafe', 'restaurant', 
+    'tea', 'chai', 'coffee', 'supermarket', 'grocery', 'groceries', 'bakery', 'food', 
+    'tiffin', 'curry', 'curries', 'chicken', 'mutton', 'fish', 'meat', 'egg', 'eggs', 
+    'paneer', 'spices', 'spice', 'masala', 'chilli', 'chili', 'turmeric', 'salt', 'pepper', 
+    'oil', 'ghee', 'tomato', 'tomatoes', 'potato', 'potatoes', 'onion', 'onions', 
+    'vegetable', 'vegetables', 'veggies', 'veggie', 'fruit', 'fruits', 'apple', 'banana', 
+    'mango', 'milk', 'curd', 'butter', 'cheese', 'dahi', 'lassi', 'bread', 'rice', 
+    'dal', 'atta', 'flour', 'wheat', 'roti', 'naan', 'paratha', 'dosa', 'idli', 'snack', 
+    'snacks', 'biscuit', 'biscuits', 'chips', 'chocolate', 'sweets', 'sweet', 'ice cream'
+  ],
+  'Transportation': [
+    'uber', 'ola', 'rapido', 'metro', 'namma metro', 'auto', 'cab', 'taxi', 'fuel', 
+    'petrol', 'diesel', 'fastag', 'toll', 'parking', 'bus', 'train', 'irctc', 'flight'
+  ],
+  'Shopping & Retail': [
+    'amazon', 'flipkart', 'myntra', 'ajio', 'tata cliq', 'nykaa', 'zara', 'h&m', 
+    'decathlon', 'd-mart', 'dmart', 'croma', 'reliance digital', 'clothes', 'shoes', 
+    'shopping', 'electronics', 'dress', 'shirt', 'pants'
+  ],
+  'Bills & Utilities': [
+    'electricity', 'bescom', 'tata sky', 'airtel', 'jio', 'vi', 'vodafone', 'broadband', 
+    'wifi', 'water bill', 'gas', 'indane', 'hp gas', 'rent', 'maintenance', 'recharge', 'cylinder'
+  ],
+  'Entertainment': [
+    'netflix', 'hotstar', 'prime video', 'spotify', 'youtube', 'bookmyshow', 'cinema', 
+    'movie', 'gaming', 'steam', 'playstation', 'concert', 'event'
+  ],
+  'Health & Wellness': [
+    'apollo', '1mg', 'pharmeasy', 'pharmacy', 'hospital', 'doctor', 'clinic', 'cult.fit', 
+    'gym', 'fitness', 'medicines', 'medicine', 'lab test'
+  ],
+  'Travel': [
+    'makemytrip', 'goibibo', 'cleartrip', 'airbnb', 'hotel', 'flight', 'resort', 
+    'indigo', 'air india', 'stay', 'vacation', 'trip'
+  ],
+  'Education': [
+    'udemy', 'coursera', 'books', 'stationery', 'school', 'college', 'tuition', 
+    'course', 'exam fee', 'book'
+  ],
+  'Services': [
+    'urban company', 'dry clean', 'laundry', 'salon', 'barber', 'spa', 'plumber', 'electrician'
+  ]
 };
 
 function autoCategorize(text: string): string {
-  const lower = text.toLowerCase();
+  let lower = text.toLowerCase();
+  lower = lower.replace(/\b(dro|fro|fon|fo)\b/gi, 'for');
+
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some(keyword => lower.includes(keyword))) {
       return category;
@@ -35,9 +72,116 @@ function autoCategorize(text: string): string {
   return 'Others';
 }
 
-export function parseTextExpense(text: string) {
+export function parseFlexibleOrTextDate(str: string): string | null {
+  const lower = str.toLowerCase().trim();
+  const today = new Date();
+
+  if (lower === 'today') {
+    return today.toISOString().split('T')[0];
+  }
+  if (lower === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+  if (lower === 'tomorrow' || lower === 'tommorow') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  }
+
+  const monthMap: Record<string, string> = {
+    jan: '01', january: '01',
+    feb: '02', february: '02',
+    mar: '03', march: '03',
+    apr: '04', april: '04',
+    may: '05',
+    jun: '06', june: '06',
+    jul: '07', july: '07',
+    aug: '08', august: '08',
+    sep: '09', sept: '09', september: '09',
+    oct: '10', october: '10',
+    nov: '11', november: '11',
+    dec: '12', december: '12'
+  };
+
+  const monthRegex = /\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec)\b/i;
+  const monthMatch = lower.match(monthRegex);
+
+  if (monthMatch) {
+    const mStr = monthMatch[1].toLowerCase();
+    const monthNum = monthMap[mStr];
+
+    const dayMatch = lower.match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/);
+    if (dayMatch) {
+      const dayNum = parseInt(dayMatch[1], 10);
+      if (dayNum >= 1 && dayNum <= 31) {
+        const paddedDay = dayNum < 10 ? `0${dayNum}` : `${dayNum}`;
+        const yearMatch = lower.match(/\b(20\d{2})\b/);
+        const yearStr = yearMatch ? yearMatch[1] : `${today.getFullYear()}`;
+        return `${yearStr}-${monthNum}-${paddedDay}`;
+      }
+    }
+  }
+
+  const flex = parseFlexibleDate(str);
+  if (flex && /^\d{4}-\d{2}-\d{2}$/.test(flex)) {
+    return flex;
+  }
+
+  return null;
+}
+
+export function extractDateDirective(text: string): { date: string; cleanText: string; hasExplicitDate: boolean } {
+  const defaultDate = new Date().toISOString().split('T')[0];
+  let extractedDate = defaultDate;
+  let hasExplicitDate = false;
+
+  const lines = text.split(/[\r\n]+/);
+  const remainingLines: string[] = [];
+
+  const dateLineRegex = /^(?:date|dated|on date)\s*[:-=]?\s*(.+)$/i;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const match = trimmed.match(dateLineRegex);
+    if (match) {
+      const dateValStr = match[1].trim();
+      const parsed = parseFlexibleOrTextDate(dateValStr);
+      if (parsed) {
+        extractedDate = parsed;
+        hasExplicitDate = true;
+        continue; // Skip date line so it is never treated as an expense!
+      }
+    }
+
+    remainingLines.push(line);
+  }
+
+  return {
+    date: extractedDate,
+    cleanText: remainingLines.join('\n'),
+    hasExplicitDate
+  };
+}
+
+export function parseTextExpense(text: string, defaultDate?: string) {
   const trimmed = text.trim();
-  const normalizedText = trimmed.replace(/(\d+)\s*,\s*(\d+)/g, '$1$2');
+  
+  // Check if line is a date directive or income line
+  if (/^(?:date|dated|on date)\s*[:-=]/i.test(trimmed)) {
+    return { amount: null, category: 'Others', description: '', merchant: '', paymentMethod: 'UPI', date: defaultDate || new Date().toISOString().split('T')[0] };
+  }
+  if (/\b(credited|received|deposit|deposited|salary|cashback)\b/i.test(trimmed)) {
+    return { amount: null, category: 'Others', description: '', merchant: '', paymentMethod: 'UPI', date: defaultDate || new Date().toISOString().split('T')[0] };
+  }
+
+  const normalizedText = trimmed
+    .replace(/(\d+)\s*,\s*(\d+)/g, '$1$2')
+    .replace(/\b(dro|fro|fon|fo)\b/gi, 'for');
+
   let amount: number | null = null;
   
   const currencyRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)/i;
@@ -72,7 +216,7 @@ export function parseTextExpense(text: string) {
   }
 
   let merchant = '';
-  const merchants = ['Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 'Amazon', 'Flipkart', 'Myntra', 'Netflix', 'Spotify', 'Apollo', 'D-Mart', 'BESCOM', 'Airtel', 'Coffee', 'Tiffin'];
+  const merchants = ['Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 'Amazon', 'Flipkart', 'Myntra', 'Netflix', 'Spotify', 'Apollo', 'D-Mart', 'BESCOM', 'Airtel', 'Coffee', 'Tiffin', 'Chicken', 'Spices', 'Tomato'];
   for (const m of merchants) {
     if (lower.includes(m.toLowerCase())) {
       merchant = m;
@@ -91,12 +235,15 @@ export function parseTextExpense(text: string) {
     description: description || 'WhatsApp Expense',
     merchant,
     paymentMethod,
-    date: new Date().toISOString().split('T')[0]
+    date: defaultDate || new Date().toISOString().split('T')[0]
   };
 }
 
-export function parseMultipleTextExpenses(text: string) {
-  const trimmed = text.trim();
+export function parseMultipleTextExpenses(text: string, defaultDate?: string) {
+  const { date: extractedDate, cleanText } = extractDateDirective(text);
+  const targetDate = defaultDate || extractedDate;
+
+  const trimmed = cleanText.trim();
   const lower = trimmed.toLowerCase();
 
   let globalPaymentMethod = 'UPI';
@@ -125,7 +272,12 @@ export function parseMultipleTextExpenses(text: string) {
       continue;
     }
 
-    const exp = parseTextExpense(line);
+    // Skip income lines from expense batch
+    if (/\b(credited|received|deposit|deposited|salary|cashback)\b/i.test(lineLower)) {
+      continue;
+    }
+
+    const exp = parseTextExpense(line, targetDate);
     if (exp.amount !== null) {
       if (!lineLower.includes('cash') && !lineLower.includes('credit card') && !lineLower.includes('debit card')) {
         exp.paymentMethod = globalPaymentMethod;
@@ -144,30 +296,51 @@ export function parseMultipleTextExpenses(text: string) {
   return items;
 }
 
-export function parseIncomeRecord(text: string) {
-  const trimmed = text.trim();
+export function parseIncomeRecord(text: string, defaultDate?: string) {
+  const { date: extractedDate, cleanText } = extractDateDirective(text);
+  const targetDate = defaultDate || extractedDate;
+
+  const trimmed = cleanText.trim();
   const lower = trimmed.toLowerCase();
   const isIncome = /\b(credited|received|deposit|deposited|salary|cashback|earned)\b/i.test(lower);
   if (!isIncome) {
-    return { isIncome: false, amount: null, description: '' };
+    return { isIncome: false, amount: null, description: '', date: targetDate };
   }
 
-  const cleaned = trimmed.replace(/(\d+)\s*,\s*(\d+)/g, '$1$2');
-  const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
-  const match = cleaned.match(amountRegex);
+  // Handle numbers with spaces around commas or dots like "35 ,000", "35 , 000", "35,000", "35 000"
+  const cleaned = trimmed
+    .replace(/(\d+)\s*,\s*(\d+)/g, '$1$2')
+    .replace(/(\d+)\s+(\d{3})\b/g, '$1$2');
+
+  const incomeRegex = /\b(?:credited|received|deposit|deposited|salary|cashback|earned)\b\s*(?:(?:rs\.?|inr|₹)\s*)?([\d,]+(?:\.\d+)?)/i;
+  const amountRegex = /(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
+
   let amount: number | null = null;
-  if (match) {
-    const rawNum = (match[1] || match[2]).replace(/,/g, '');
+  const incMatch = cleaned.match(incomeRegex);
+  if (incMatch) {
+    const rawNum = incMatch[1].replace(/,/g, '');
     const parsed = parseFloat(rawNum);
     if (!isNaN(parsed) && parsed > 0) {
       amount = parsed;
     }
   }
 
+  if (!amount) {
+    const match = cleaned.match(amountRegex);
+    if (match) {
+      const rawNum = (match[1] || match[2] || '').replace(/,/g, '');
+      const parsed = parseFloat(rawNum);
+      if (!isNaN(parsed) && parsed > 0) {
+        amount = parsed;
+      }
+    }
+  }
+
   return {
     isIncome: true,
     amount,
-    description: trimmed
+    description: trimmed,
+    date: targetDate
   };
 }
 
@@ -238,7 +411,7 @@ export function parseTextPeerRecord(text: string) {
         yesterday.setDate(yesterday.getDate() - 1);
         recDate = yesterday.toISOString().split('T')[0];
       } else if (parsedDate.trim()) {
-        recDate = parseFlexibleDate(parsedDate);
+        recDate = parseFlexibleOrTextDate(parsedDate) || parseFlexibleDate(parsedDate);
       }
 
       let dueD: string | undefined = undefined;
@@ -251,7 +424,7 @@ export function parseTextPeerRecord(text: string) {
         nextWeek.setDate(nextWeek.getDate() + 7);
         dueD = nextWeek.toISOString().split('T')[0];
       } else if (parsedDueDate.trim()) {
-        dueD = parseFlexibleDate(parsedDueDate);
+        dueD = parseFlexibleOrTextDate(parsedDueDate) || parseFlexibleDate(parsedDueDate);
       }
 
       return {
@@ -348,7 +521,7 @@ export function parseTextPeerRecord(text: string) {
   } else {
     const dateMatch = lower.match(/\bon\s+([\d]{2,4}[-/][\d]{2}[-/][\d]{2,4})\b/);
     if (dateMatch) {
-      recordDate = parseFlexibleDate(dateMatch[1]);
+      recordDate = parseFlexibleOrTextDate(dateMatch[1]) || parseFlexibleDate(dateMatch[1]);
     }
   }
 
@@ -364,7 +537,7 @@ export function parseTextPeerRecord(text: string) {
   } else {
     const dueMatch = lower.match(/\bdue\s+([\d]{2,4}[-/][\d]{2}[-/][\d]{2,4})\b/);
     if (dueMatch) {
-      dueDateStr = parseFlexibleDate(dueMatch[1]);
+      dueDateStr = parseFlexibleOrTextDate(dueMatch[1]) || parseFlexibleDate(dueMatch[1]);
     }
   }
 
@@ -442,14 +615,15 @@ export function parseTextPayback(text: string) {
 }
 
 export function localParseMessage(text: string) {
-  const trimmed = text.trim();
+  const { date: targetDate, cleanText, hasExplicitDate } = extractDateDirective(text);
+  const trimmed = cleanText.trim();
 
   // 1. Payback check
   const payback = parseTextPayback(trimmed);
   if (payback.isPayback && payback.peerName) {
     return {
       intent: 'log_payback',
-      data: { peerName: payback.peerName, amount: payback.amount }
+      data: { peerName: payback.peerName, amount: payback.amount, date: targetDate }
     };
   }
 
@@ -463,39 +637,77 @@ export function localParseMessage(text: string) {
         amount: peerRecord.amount,
         type: peerRecord.type,
         description: peerRecord.description,
-        dueDate: peerRecord.dueDate || null
+        dueDate: peerRecord.dueDate || null,
+        date: targetDate
       }
     };
   }
 
-  // 3. Income / Credited check
-  const incomeRecord = parseIncomeRecord(trimmed);
+  // 3. Multi-line Check: check for both Expenses AND Income
+  const lines = trimmed.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+  const incomeLines: string[] = [];
+  const expenseLines: string[] = [];
+
+  for (const line of lines) {
+    if (/\b(credited|received|deposit|deposited|salary|cashback|earned)\b/i.test(line)) {
+      incomeLines.push(line);
+    } else {
+      expenseLines.push(line);
+    }
+  }
+
+  const parsedIncomes = incomeLines
+    .map(line => parseIncomeRecord(line, targetDate))
+    .filter(inc => inc.isIncome && inc.amount !== null);
+
+  const parsedExpenses = parseMultipleTextExpenses(expenseLines.join('\n'), targetDate);
+
+  if (parsedExpenses.length > 0 && parsedIncomes.length > 0) {
+    return {
+      intent: 'log_multi_financial',
+      data: {
+        expenses: parsedExpenses,
+        incomes: parsedIncomes,
+        date: targetDate,
+        hasExplicitDate
+      }
+    };
+  }
+
+  // 4. Standalone Income check
+  const incomeRecord = parseIncomeRecord(trimmed, targetDate);
   if (incomeRecord.isIncome && incomeRecord.amount) {
     return {
       intent: 'log_income',
       data: {
         amount: incomeRecord.amount,
         description: incomeRecord.description || 'Money Credited',
-        category: 'Income'
+        category: 'Income',
+        date: targetDate,
+        hasExplicitDate
       }
     };
   }
 
-  // 4. Expense check (single or multiline)
-  const items = parseMultipleTextExpenses(trimmed);
-  if (items.length > 0) {
+  // 5. Standalone Expense check
+  if (parsedExpenses.length > 0) {
     return {
       intent: 'log_expense',
-      data: { items }
+      data: {
+        items: parsedExpenses,
+        date: targetDate,
+        hasExplicitDate
+      }
     };
   }
 
-  // 5. Fallback: Save as Second Brain memory note
+  // 6. Fallback: Save as Second Brain memory note
   return {
     intent: 'log_memory',
     data: {
-      content: trimmed,
-      category: 'note'
+      content: text.trim(),
+      category: 'note',
+      date: targetDate
     }
   };
 }
@@ -753,13 +965,19 @@ Return ONLY a clean JSON object without markdown fences:
 Analyze the user's message and determine the correct intent. Respond ONLY with a clean JSON object. Do not include markdown fences.
 
 Intents:
-- "log_expense": spending money (e.g., "spent 350 on lunch", "spent 40 tiffin \n 80 curries \n Pp", "zomato 250 paid upi", "spend 30 on coffee cash")
-- "log_income": receiving money / salary / credits (e.g., "Credited 35,000", "salary 50000 received", "received 500 from bank")
+- "log_expense": spending money (e.g., "spent 350 on lunch", "spent 40 tiffin \n 80 curries \n Pp", "zomato 250 paid upi", "spend 30 on coffee cash", "150 on chicken \n 50 dro spices \n 25 fro tomato \n Date :-august 2")
+- "log_income": receiving money / salary / credits (e.g., "Credited 35,000", "Credited 35 ,000", "salary 50000 received", "received 500 from bank")
 - "log_peer": lending or borrowing money (e.g., "lent 500 to Sneha for split", "borrowed 1000 from Rohit")
 - "log_payback": settling debts (e.g., "Sneha paid back 500", "repaid 1000 to Rohit")
 - "log_memory": saving a non-monetary real-life note, reminder, task, idea, or memo (e.g., "Doctor appointment on Friday at 5pm", "Buy groceries")
 - "query_database": questioning past transactions or memory (e.g., "who owes me money?", "how much did I spend on cabs?")
 - "general_chat": general chatting or greetings
+
+Important Rules:
+1. If the message contains explicit date directives (e.g. "Date :-august 2", "date: 2 Aug"), extract that date (YYYY-MM-DD) and assign it to all expense/income items. Do NOT parse the date directive line as an expense item!
+2. Food items like "chicken", "spices", "tomato", "tiffin", "curries", "groceries" MUST be categorized as "Food & Dining".
+3. Handle typos in prepositions (e.g., "dro spices" -> "spices", "fro tomato" -> "tomato").
+4. Messages containing "Credited", "Received", "Salary" followed by an amount MUST be categorized as "log_income", NEVER "log_memory".
 
 Return Format:
 {
@@ -772,13 +990,15 @@ Return Format:
         "merchant": string,
         "category": "Food & Dining" | "Transportation" | "Shopping & Retail" | "Bills & Utilities" | "Entertainment" | "Health & Wellness" | "Travel" | "Education" | "Services" | "Others",
         "description": string,
-        "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking"
+        "paymentMethod": "UPI" | "Credit Card" | "Debit Card" | "Cash" | "Net Banking",
+        "date": "YYYY-MM-DD"
       }
     ],
 
     // For log_income:
     "amount": number,
     "description": string,
+    "date": "YYYY-MM-DD",
 
     // For log_peer:
     "peerName": string,
@@ -786,6 +1006,7 @@ Return Format:
     "type": "lent" | "borrowed",
     "description": string,
     "dueDate": "YYYY-MM-DD" | null,
+    "date": "YYYY-MM-DD",
 
     // For log_payback:
     "peerName": string,
@@ -815,15 +1036,83 @@ Return Format:
                 }
               }
 
-              if (!parsedIntentObj || !parsedIntentObj.intent) {
-                parsedIntentObj = localParseMessage(msgText);
+              // Always run local parser as benchmark
+              const localParsed = localParseMessage(msgText);
+
+              // Override LLM if Gemini returned log_memory or general_chat when text clearly contains financial keywords
+              if (!parsedIntentObj || !parsedIntentObj.intent || 
+                  ((parsedIntentObj.intent === 'log_memory' || parsedIntentObj.intent === 'general_chat') && 
+                   (localParsed.intent === 'log_income' || localParsed.intent === 'log_expense' || localParsed.intent === 'log_multi_financial' || localParsed.intent === 'log_peer' || localParsed.intent === 'log_payback'))) {
+                parsedIntentObj = localParsed;
               }
 
               const intent = parsedIntentObj.intent;
               const data = parsedIntentObj.data || {};
+              const todayStr = new Date().toISOString().split('T')[0];
+
+              // 0. Log Multi-Financial (Expenses + Income in single message)
+              if (intent === 'log_multi_financial') {
+                const expensesToInsert = data.expenses || [];
+                const incomesToInsert = data.incomes || [];
+                const dateStr = data.date || todayStr;
+
+                if (expensesToInsert.length > 0) {
+                  const records = expensesToInsert.map((item: any) => ({
+                    amount: item.amount,
+                    category: item.category || autoCategorize(item.description || item.merchant || msgText),
+                    description: item.description || 'WhatsApp Expense',
+                    merchant: item.merchant || '',
+                    paymentmethod: item.paymentMethod || 'UPI',
+                    date: item.date || dateStr,
+                    notes: `Processed via SpendWise: "${msgText}"`,
+                    source: 'whatsapp'
+                  }));
+                  const { error: expErr } = await supabase.from('expenses').insert(records);
+                  if (expErr) throw expErr;
+                }
+
+                if (incomesToInsert.length > 0) {
+                  const memRecords = incomesToInsert.map((inc: any) => ({
+                    content: `[INCOME] Credited ₹${Number(inc.amount).toLocaleString('en-IN')}: ${inc.description}`,
+                    metadata: {
+                      source: 'whatsapp_text',
+                      category: 'income',
+                      amount: inc.amount,
+                      date: inc.date || dateStr
+                    }
+                  }));
+                  const { error: incErr } = await supabase.from('memories').insert(memRecords);
+                  if (incErr) throw incErr;
+                }
+
+                const replyParts: string[] = [];
+
+                if (expensesToInsert.length > 0) {
+                  if (expensesToInsert.length === 1) {
+                    const i = expensesToInsert[0];
+                    replyParts.push(`✅ *Recorded Expense!*\n\n• *Amount:* ₹${i.amount}\n• *Merchant:* ${i.merchant || 'N/A'}\n• *Category:* ${i.category}\n• *Payment:* ${i.paymentMethod}`);
+                  } else {
+                    const expLines = expensesToInsert.map((i: any) => `• *${i.description || i.merchant || 'Expense'}*: ₹${i.amount} (${i.category || 'Others'}) [${i.paymentMethod || 'UPI'}]`);
+                    const totalSum = expensesToInsert.reduce((acc: number, i: any) => acc + Number(i.amount), 0);
+                    replyParts.push(`✅ *Recorded ${expensesToInsert.length} Expenses!*\n\n${expLines.join('\n')}\n\n💰 *Total Spent:* ₹${totalSum}`);
+                  }
+                }
+
+                if (incomesToInsert.length > 0) {
+                  const incLines = incomesToInsert.map((inc: any) => `• *Credited:* ₹${Number(inc.amount).toLocaleString('en-IN')} (${inc.description})`);
+                  replyParts.push(`💵 *Income / Credit Recorded!*\n\n${incLines.join('\n')}`);
+                }
+
+                if (data.hasExplicitDate || data.date) {
+                  replyParts.push(`📅 *Date:* ${data.date || dateStr}`);
+                }
+
+                replyParts.push(`Synced with SpendWise!`);
+                replyBody = replyParts.join('\n\n');
+              }
 
               // 1. Log Expense (Single or Multiple items)
-              if (intent === 'log_expense') {
+              else if (intent === 'log_expense') {
                 const itemsToInsert: Array<any> = Array.isArray(data.items) && data.items.length > 0
                   ? data.items
                   : (data.amount ? [data] : []);
@@ -837,7 +1126,7 @@ Return Format:
                     description: item.description || 'WhatsApp Expense',
                     merchant: item.merchant || '',
                     paymentmethod: item.paymentMethod || 'UPI',
-                    date: new Date().toISOString().split('T')[0],
+                    date: item.date || data.date || todayStr,
                     notes: `Processed via SpendWise: "${msgText}"`,
                     source: 'whatsapp'
                   }));
@@ -852,6 +1141,7 @@ Return Format:
                       `• *Merchant:* ${item.merchant || 'N/A'}\n` +
                       `• *Category:* ${item.category || autoCategorize(item.description || '')}\n` +
                       `• *Payment:* ${item.paymentMethod || 'UPI'}\n\n` +
+                      (data.hasExplicitDate || item.date ? `📅 *Date:* ${item.date || data.date}\n\n` : '') +
                       `Synced with SpendWise!`;
                   } else {
                     const lines = validItems.map(i => `• *${i.description || i.merchant || 'Expense'}*: ₹${i.amount} (${i.category || 'Others'}) [${i.paymentMethod || 'UPI'}]`);
@@ -859,12 +1149,13 @@ Return Format:
                     replyBody = `✅ *Recorded ${validItems.length} Expenses!*\n\n` +
                       `${lines.join('\n')}\n\n` +
                       `💰 *Total Spent:* ₹${totalSum}\n` +
+                      (data.hasExplicitDate || data.date ? `📅 *Date:* ${data.date}\n` : '') +
                       `Synced with SpendWise!`;
                   }
                 } else {
                   await supabase.from('memories').insert([{
                     content: `[NOTE] ${msgText}`,
-                    metadata: { source: 'whatsapp_text', category: 'note', date: new Date().toISOString().split('T')[0] }
+                    metadata: { source: 'whatsapp_text', category: 'note', date: data.date || todayStr }
                   }]);
                   replyBody = `📝 *Saved to Second Brain Notes!*\n\n"${msgText}"`;
                 }
@@ -874,13 +1165,14 @@ Return Format:
               else if (intent === 'log_income' && data.amount) {
                 const amount = data.amount;
                 const desc = data.description || msgText;
+                const recDate = data.date || todayStr;
                 const { error: memErr } = await supabase.from('memories').insert([{
                   content: `[INCOME] Credited ₹${amount.toLocaleString('en-IN')}: ${desc}`,
                   metadata: {
                     source: 'whatsapp_text',
                     category: 'income',
                     amount,
-                    date: new Date().toISOString().split('T')[0]
+                    date: recDate
                   }
                 }]);
 
@@ -890,18 +1182,20 @@ Return Format:
                   `• *Amount:* ₹${amount.toLocaleString('en-IN')}\n` +
                   `• *Details:* ${desc}\n` +
                   `• *Category:* Income\n\n` +
+                  (data.hasExplicitDate || data.date ? `📅 *Date:* ${recDate}\n\n` : '') +
                   `Synced with SpendWise Second Brain!`;
               }
 
               // 3. Log Peer Ledger Record
               else if (intent === 'log_peer' && data.amount) {
+                const recDate = data.date || todayStr;
                 const { error } = await supabase.from('peer_records').insert([{
                   name: data.peerName || 'Friend',
                   amount: data.amount,
                   original_amount: data.amount,
                   type: data.type || 'lent',
                   description: data.description || 'Peer Split',
-                  date: new Date().toISOString().split('T')[0],
+                  date: recDate,
                   due_date: data.dueDate || null,
                   status: 'pending'
                 }]);
@@ -912,7 +1206,7 @@ Return Format:
                     category: 'Others',
                     description: `${data.type === 'lent' ? 'Lent to' : 'Borrowed from'} ${data.peerName}: ${data.description}`,
                     paymentmethod: 'UPI',
-                    date: new Date().toISOString().split('T')[0],
+                    date: recDate,
                     source: 'whatsapp',
                     notes: `Logged as fallback`
                   }]);
@@ -925,6 +1219,7 @@ Return Format:
                     `• *Amount:* ₹${data.amount}\n` +
                     `• *Description:* ${data.description || 'Peer split'}\n` +
                     (data.dueDate ? `⏰ *Due Date:* ${data.dueDate}\n` : '') +
+                    (data.hasExplicitDate || data.date ? `📅 *Date:* ${recDate}\n` : '') +
                     `\nSynced with SpendWise!`;
                 }
               }
@@ -976,7 +1271,7 @@ Return Format:
                   metadata: {
                     source: 'whatsapp_text',
                     category: data.category || 'note',
-                    date: new Date().toISOString().split('T')[0]
+                    date: data.date || todayStr
                   }
                 }]);
 
@@ -1027,16 +1322,16 @@ User's Question: "${msgText}"`;
               console.error('Text Processing Error:', textErr);
               try {
                 const fallbackObj = localParseMessage(msgText);
-                if (fallbackObj.intent === 'log_expense' && fallbackObj.data.items?.length) {
+                if ((fallbackObj.intent === 'log_expense' || fallbackObj.intent === 'log_multi_financial') && fallbackObj.data.items?.length) {
                   const items = fallbackObj.data.items;
                   if (supabase) {
-                    await supabase.from('expenses').insert(items.map(i => ({
+                    await supabase.from('expenses').insert(items.map((i: any) => ({
                       amount: i.amount,
                       category: i.category,
                       description: i.description,
                       merchant: i.merchant,
                       paymentmethod: i.paymentMethod,
-                      date: new Date().toISOString().split('T')[0],
+                      date: i.date || new Date().toISOString().split('T')[0],
                       notes: `Logged via fallback parser`,
                       source: 'whatsapp'
                     })));
@@ -1051,7 +1346,8 @@ User's Question: "${msgText}"`;
                   }
                   replyBody = `📝 *Saved to Second Brain Notes!*\n\n"${msgText}"`;
                 }
-              } catch (e) {
+              } catch (err: any) {
+                console.error('Fallback execution error:', err.message);
                 replyBody = `📝 *Received message:* "${msgText}". Saved to SpendWise!`;
               }
             }
