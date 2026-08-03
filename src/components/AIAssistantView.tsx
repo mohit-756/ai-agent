@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { Bot, Send, User, Sparkles, MessageSquare } from 'lucide-react';
 import type { ChatMessage, Expense, Budget } from '../types/expense';
 import { AIFinanceService } from '../services/aiFinanceService';
-import { WhatsAppHubView } from './WhatsAppHubView';
+
+const WhatsAppHubView = lazy(() => import('./WhatsAppHubView').then(m => ({ default: m.WhatsAppHubView })));
 
 interface AIAssistantViewProps {
   expenses: Expense[];
@@ -233,7 +234,9 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({
           </form>
         </>
       ) : (
-        <WhatsAppHubView onExpenseAddedByWhatsApp={onExpenseAddedByWhatsApp || (() => {})} />
+        <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400 font-semibold animate-pulse">Loading WhatsApp Integration...</div>}>
+          <WhatsAppHubView onExpenseAddedByWhatsApp={onExpenseAddedByWhatsApp || (() => {})} />
+        </Suspense>
       )}
     </div>
   );

@@ -99,12 +99,16 @@ export class AIFinanceService {
       }
     }
 
-    // 2. Category Auto Detection
-    const category: Category = autoCategorize(trimmed);
-
-    // 3. Payment Method Detection
-    let paymentMethod: PaymentMethod = 'UPI';
+    // 2. Income Detection
     const lower = trimmed.toLowerCase();
+    const isIncome = /\b(credited|received|deposit|deposited|salary|cashback|earned|freelance|paycheck|bonus)\b/i.test(lower);
+    const type: 'expense' | 'income' = isIncome ? 'income' : 'expense';
+
+    // 3. Category Auto Detection
+    const category: Category = isIncome ? 'Income' : autoCategorize(trimmed);
+
+    // 4. Payment Method Detection
+    let paymentMethod: PaymentMethod = 'UPI';
     if (lower.includes('credit card') || lower.includes('cc')) {
       paymentMethod = 'Credit Card';
     } else if (lower.includes('debit card') || lower.includes('dc')) {
@@ -115,7 +119,7 @@ export class AIFinanceService {
       paymentMethod = 'Net Banking';
     }
 
-    // 4. Date Detection (yesterday, today)
+    // 5. Date Detection (yesterday, today)
     const today = new Date();
     let dateStr = today.toISOString().split('T')[0];
     if (lower.includes('yesterday')) {
@@ -124,7 +128,7 @@ export class AIFinanceService {
       dateStr = yesterday.toISOString().split('T')[0];
     }
 
-    // 5. Merchant & Description extraction
+    // 6. Merchant & Description extraction
     let merchant = '';
     const merchants = [
       'Swiggy', 'Zomato', 'Blinkit', 'Zepto', 'Instamart', 'Uber', 'Ola', 'Rapido', 
@@ -139,7 +143,7 @@ export class AIFinanceService {
 
     // Clean up description
     let description = trimmed;
-    description = description.replace(/^(spent|paid|bought|add|expense|for|on)\s+/i, '');
+    description = description.replace(/^(spent|paid|bought|add|expense|credited|received|for|on)\s+/i, '');
     if (merchant && !description.toLowerCase().includes(merchant.toLowerCase())) {
       description = `${merchant} - ${description}`;
     }
@@ -149,11 +153,12 @@ export class AIFinanceService {
     return {
       amount,
       category,
-      description: description || 'Miscellaneous Expense',
+      description: description || (isIncome ? 'Money Credited' : 'Miscellaneous Expense'),
       merchant,
       paymentMethod,
       date: dateStr,
-      confidence
+      confidence,
+      type
     };
   }
 

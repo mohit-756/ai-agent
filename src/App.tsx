@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import type { ActiveTab } from './components/Navbar';
 import { QuickAddBar } from './components/QuickAddBar';
 import { ExpenseModal } from './components/ExpenseModal';
 import { DashboardView } from './components/DashboardView';
 import { ExpensesView } from './components/ExpensesView';
-import { BudgetsView } from './components/BudgetsView';
-import { AIAssistantView } from './components/AIAssistantView';
-import { PeerBalancesView } from './components/PeerBalancesView';
 import { AuthModal } from './components/AuthModal';
 import type { UserSession } from './components/AuthModal';
+
+const BudgetsView = lazy(() => import('./components/BudgetsView').then(m => ({ default: m.BudgetsView })));
+const AIAssistantView = lazy(() => import('./components/AIAssistantView').then(m => ({ default: m.AIAssistantView })));
+const PeerBalancesView = lazy(() => import('./components/PeerBalancesView').then(m => ({ default: m.PeerBalancesView })));
 import { PeerService } from './services/peerService';
 import { ExpenseService } from './services/expenseService';
 import { BudgetService } from './services/budgetService';
@@ -222,25 +223,31 @@ export function App() {
         )}
 
         {activeTab === 'peer-ledger' && (
-          <PeerBalancesView
-            theme={theme}
-            onUpdateMetrics={handleUpdatePeerMetrics}
-          />
+          <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400 font-semibold animate-pulse">Loading Peer Ledger...</div>}>
+            <PeerBalancesView
+              theme={theme}
+              onUpdateMetrics={handleUpdatePeerMetrics}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'budgets' && (
-          <BudgetsView
-            expenses={expenses}
-            onBudgetsUpdated={handleBudgetsUpdated}
-          />
+          <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400 font-semibold animate-pulse">Loading Category Budgets...</div>}>
+            <BudgetsView
+              expenses={expenses}
+              onBudgetsUpdated={handleBudgetsUpdated}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'ai-assistant' && (
-          <AIAssistantView
-            expenses={expenses}
-            budgets={budgets}
-            onExpenseAddedByWhatsApp={handleExpenseAddedByWhatsApp}
-          />
+          <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400 font-semibold animate-pulse">Loading AI Coach...</div>}>
+            <AIAssistantView
+              expenses={expenses}
+              budgets={budgets}
+              onExpenseAddedByWhatsApp={handleExpenseAddedByWhatsApp}
+            />
+          </Suspense>
         )}
 
       </main>

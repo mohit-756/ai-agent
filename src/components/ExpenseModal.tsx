@@ -33,6 +33,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   onUpdate,
   initialExpense
 }) => {
+  const [recordType, setRecordType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState<string>('');
   const [category, setCategory] = useState<Category>('Food & Dining');
   const [description, setDescription] = useState<string>('');
@@ -43,6 +44,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
 
   useEffect(() => {
     if (initialExpense) {
+      setRecordType(initialExpense.type || (initialExpense.category === 'Income' ? 'income' : 'expense'));
       setAmount(initialExpense.amount.toString());
       setCategory(initialExpense.category);
       setDescription(initialExpense.description);
@@ -51,6 +53,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
       setDate(initialExpense.date);
       setNotes(initialExpense.notes || '');
     } else {
+      setRecordType('expense');
       setAmount('');
       setCategory('Food & Dining');
       setDescription('');
@@ -61,11 +64,20 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     }
   }, [initialExpense, isOpen]);
 
+  const handleRecordTypeChange = (newType: 'expense' | 'income') => {
+    setRecordType(newType);
+    if (newType === 'income') {
+      setCategory('Income');
+    } else if (category === 'Income') {
+      setCategory('Food & Dining');
+    }
+  };
+
   // Auto-categorize based on description or merchant changes
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setDescription(val);
-    if (!initialExpense && val.length > 2) {
+    if (!initialExpense && recordType === 'expense' && val.length > 2) {
       const detected = autoCategorize(val);
       if (detected !== 'Others') {
         setCategory(detected);
@@ -78,24 +90,28 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
 
+    const finalCategory = recordType === 'income' ? 'Income' : category;
+
     if (initialExpense && onUpdate) {
       onUpdate(initialExpense.id, {
         amount: numAmount,
-        category,
-        description: description || 'Expense',
+        category: finalCategory,
+        description: description || (recordType === 'income' ? 'Income Credit' : 'Expense'),
         merchant,
         paymentMethod,
         date,
+        type: recordType,
         notes
       });
     } else {
       onSave({
         amount: numAmount,
-        category,
-        description: description || 'Expense',
+        category: finalCategory,
+        description: description || (recordType === 'income' ? 'Income Credit' : 'Expense'),
         merchant,
         paymentMethod,
         date,
+        type: recordType,
         notes
       });
     }
@@ -130,6 +146,32 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
+          {/* Record Type Selector (Expense vs Income) */}
+          <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => handleRecordTypeChange('expense')}
+              className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                recordType === 'expense'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>Expense ↗</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRecordTypeChange('income')}
+              className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                recordType === 'income'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>Income 💵</span>
+            </button>
+          </div>
+
           {/* Amount Input */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">

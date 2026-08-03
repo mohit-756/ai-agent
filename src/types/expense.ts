@@ -8,6 +8,7 @@ export type Category =
   | 'Travel'
   | 'Education'
   | 'Services'
+  | 'Income'
   | 'Others';
 
 export type PaymentMethod = 'UPI' | 'Credit Card' | 'Debit Card' | 'Net Banking' | 'Cash';
@@ -21,6 +22,7 @@ export interface Expense {
   paymentMethod: PaymentMethod;
   date: string; // YYYY-MM-DD
   createdAt: string; // ISO string
+  type?: 'expense' | 'income'; // 'expense' (default) or 'income'
   notes?: string;
   tags?: string[];
   source?: 'manual' | 'whatsapp' | 'nlp';
@@ -93,4 +95,5 @@ export interface NLPParseResult {
   paymentMethod: PaymentMethod;
   date: string;
   confidence: number;
+  type?: 'expense' | 'income';
 }

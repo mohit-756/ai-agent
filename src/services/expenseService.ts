@@ -49,6 +49,10 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
   'Services': [
     'urban company', 'dry clean', 'laundry', 'salon', 'barber', 'spa', 'plumber', 'electrician'
   ],
+  'Income': [
+    'credited', 'received', 'salary', 'cashback', 'deposit', 'deposited', 'freelance', 'paycheck', 
+    'dividend', 'bonus', 'stipend', 'interest', 'refund', 'earnings'
+  ],
   'Others': ['miscellaneous', 'cash', 'transfer', 'gift', 'other']
 };
 

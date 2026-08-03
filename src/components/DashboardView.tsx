@@ -67,15 +67,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayStr = now.toISOString().split('T')[0];
 
   // 1. Today's Expenses
-  const todayExpenses = expenses.filter(e => e.date === todayStr);
+  const todayExpenses = expenses.filter(e => e.date === todayStr && e.type !== 'income' && e.category !== 'Income');
   const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  // 2. Month's Expenses
-  const monthExpenses = expenses.filter(e => {
+  // 2. Month's Records (Separate Expense vs Income)
+  const monthAllRecords = expenses.filter(e => {
     const d = new Date(e.date);
     return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
   });
+
+  const monthExpenses = monthAllRecords.filter(e => e.type !== 'income' && e.category !== 'Income');
+  const monthIncomes = monthAllRecords.filter(e => e.type === 'income' || e.category === 'Income');
+
   const monthTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const monthIncomeTotal = monthIncomes.reduce((sum, e) => sum + e.amount, 0);
+  const netSavings = monthIncomeTotal - monthTotal;
+  const savingsRate = monthIncomeTotal > 0 ? Math.round((netSavings / monthIncomeTotal) * 100) : 0;
 
   // 3. Budget Metrics
   const totalAllocatedBudget = BudgetService.getTotalMonthlyBudget();
@@ -86,7 +93,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const daysPassedInMonth = Math.max(1, now.getDate());
   const dailyAverage = Math.round(monthTotal / daysPassedInMonth);
 
-  // 5. Category Breakdown for Pie Chart
+  // 5. Category Breakdown for Pie Chart (Excludes Income)
   const categoryMap = new Map<Category, number>();
   monthExpenses.forEach(e => {
     const cur = categoryMap.get(e.category) || 0;
@@ -99,14 +106,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     color: CATEGORY_COLORS[name] || '#94a3b8'
   }));
 
-  // 6. Last 7 Days Spending for Bar Chart
+  // 6. Last 7 Days Spending for Bar Chart (Excludes Income)
   const last7DaysData = Array.from({ length: 7 }).map((_, i) => {
     const d = new Date(now);
     d.setDate(d.getDate() - (6 - i));
     const dateStr = d.toISOString().split('T')[0];
     const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
     const dayTotal = expenses
-      .filter(e => e.date === dateStr)
+      .filter(e => e.date === dateStr && e.type !== 'income' && e.category !== 'Income')
       .reduce((sum, e) => sum + e.amount, 0);
 
     return {
@@ -156,8 +163,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         
+        {/* Monthly Income */}
+        <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
+          <div className="flex items-center justify-between text-slate-450 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Monthly Income</span>
+            <div className="p-2 rounded-xl bg-slate-950 text-emerald-400 border border-slate-900">
+              <TrendingUp className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <div className="text-xl font-bold font-outfit text-emerald-400">
+            {formatCurrency(monthIncomeTotal)}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">
+            {monthIncomes.length} income credit logs
+          </p>
+        </div>
+
         {/* Today's Spending */}
         <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-450 mb-2">
@@ -174,10 +197,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        {/* This Month Total */}
+        {/* This Month Total Expenses */}
         <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-450 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">This Month</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">This Month Spend</span>
             <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
               <Calendar className="w-3.5 h-3.5" />
             </div>
@@ -192,23 +215,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Remaining Budget */}
+        {/* Net Cash Flow / Savings */}
         <div className="bg-slate-900/20 border border-slate-900 rounded-2xl p-5 shadow-sm hover:border-slate-850 transition-all duration-300">
           <div className="flex items-center justify-between text-slate-450 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Remaining Pool</span>
-            <div className="p-2 rounded-xl bg-slate-950 text-slate-400 border border-slate-900">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Net Cash Flow</span>
+            <div className="p-2 rounded-xl bg-slate-950 text-indigo-400 border border-slate-900">
               <Wallet className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="text-xl font-bold font-outfit text-white">
-            {formatCurrency(remainingBudget)}
+          <div className={`text-xl font-bold font-outfit ${netSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {netSavings >= 0 ? '+' : ''}{formatCurrency(netSavings)}
           </div>
-          <div className="w-full bg-slate-950 rounded-full h-1 mt-2.5 overflow-hidden border border-slate-900">
-            <div 
-              className="h-full rounded-full transition-all duration-500 bg-white" 
-              style={{ width: `${budgetPercentage}%` }}
-            />
-          </div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">
+            {monthIncomeTotal > 0 ? `${savingsRate}% savings rate` : `Remaining pool: ${formatCurrency(remainingBudget)}`}
+          </p>
         </div>
 
         {/* Daily Average */}

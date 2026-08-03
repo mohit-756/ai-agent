@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { 
   Search, 
   Download, 
@@ -12,7 +12,8 @@ import {
 import type { Expense, Category, PaymentMethod } from '../types/expense';
 import { formatCurrency } from '../services/expenseService';
 import { exportExpensesToCSV } from '../utils/csvExport';
-import { AnalyticsView } from './AnalyticsView';
+
+const AnalyticsView = lazy(() => import('./AnalyticsView').then(m => ({ default: m.AnalyticsView })));
 
 interface ExpensesViewProps {
   expenses: Expense[];
@@ -48,6 +49,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Travel': '#06b6d4',
   'Education': '#6366f1',
   'Services': '#14b8a6',
+  'Income': '#10b981',
   'Others': '#64748b'
 };
 
@@ -281,8 +283,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
                         </td>
 
                         {/* Amount */}
-                        <td className="px-5 py-3.5 text-right font-extrabold text-sm text-white">
-                          {formatCurrency(exp.amount)}
+                        <td className={`px-5 py-3.5 text-right font-extrabold text-sm ${
+                          exp.type === 'income' || exp.category === 'Income' ? 'text-emerald-400' : 'text-white'
+                        }`}>
+                          {exp.type === 'income' || exp.category === 'Income' ? '+' : ''}{formatCurrency(exp.amount)}
                         </td>
 
                         {/* Actions */}
@@ -318,7 +322,9 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({
           </div>
         </>
       ) : (
-        <AnalyticsView expenses={filtered} />
+        <Suspense fallback={<div className="p-8 text-center text-xs text-slate-400 font-semibold animate-pulse">Loading Analytics Module...</div>}>
+          <AnalyticsView expenses={filtered} />
+        </Suspense>
       )}
     </div>
   );
