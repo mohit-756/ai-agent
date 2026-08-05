@@ -86,10 +86,14 @@ export class AIFinanceService {
       };
     }
 
-    // 1. Amount Extraction (matches ₹250, Rs 250, Rs. 250, INR 250, 250rs, or standalone numbers)
+    // 1. Amount Extraction (matches ₹250, Rs 250, 15k, 2.5k, 1L, INR 250, 250rs, or standalone numbers)
     let amount: number | null = null;
+    const expandedText = trimmed
+      .replace(/(\d+(?:\.\d+)?)\s*k\b/gi, (_, n) => `${parseFloat(n) * 1000}`)
+      .replace(/(\d+(?:\.\d+)?)\s*(?:l|lakh|lac)\b/gi, (_, n) => `${parseFloat(n) * 100000}`);
+
     const amountRegex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:rs|rupees|inr|₹)?/i;
-    const amountMatch = trimmed.match(amountRegex);
+    const amountMatch = expandedText.match(amountRegex);
 
     if (amountMatch) {
       const rawNum = (amountMatch[1] || amountMatch[2]).replace(/,/g, '');
@@ -492,7 +496,12 @@ export class AIFinanceService {
     expenses: Expense[],
     _budgets: Budget[]
   ): ChatMessage {
-    const q = userQuery.toLowerCase().trim();
+    const rawQ = userQuery.toLowerCase().trim();
+    // Expand shorthand amounts like 15k -> 15000, 2.5k -> 2500, 1L -> 100000
+    const q = rawQ
+      .replace(/(\d+(?:\.\d+)?)\s*k\b/gi, (_, n) => `${parseFloat(n) * 1000}`)
+      .replace(/(\d+(?:\.\d+)?)\s*(?:l|lakh|lac)\b/gi, (_, n) => `${parseFloat(n) * 100000}`);
+
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -506,7 +515,59 @@ export class AIFinanceService {
     const budgetStatuses = BudgetService.getBudgetStatuses(expenses);
     const totalAllocatedBudget = budgetStatuses.reduce((acc, b) => acc + b.allocated, 0);
 
-    // 1. Total Spending Queries ("how much did i spend", "total spending", "month spending")
+    // 1. Merchant Specific Queries ("how much on swiggy", "swiggy spend")
+    const merchantKeywords = ['swiggy', 'zomato', 'uber', 'amazon', 'blinkit', 'zepto', 'netflix'];
+    const matchedMerchant = merchantKeywords.find(m => q.includes(m));
+    if (matchedMerchant) {
+      const merchantCap = matchedMerchant.charAt(0).toUpperCase() + matchedMerchant.slice(1);
+      const merchantExpenses = monthExpenses.filter(e => 
+        (e.merchant && e.merchant.toLowerCase().includes(matchedMerchant)) ||
+        (e.description && e.description.toLowerCase().includes(matchedMerchant))
+      );
+      const merchantTotal = merchantExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'assistant',
+        text: `You have spent **${formatCurrency(merchantTotal)}** on **${merchantCap}** so far this month across ${merchantExpenses.length} transactions. Your overall monthly budget is **${formatCurrency(totalAllocatedBudget)}**, leaving **${formatCurrency(Math.max(0, totalAllocatedBudget - monthTotal))}** remaining.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cardData: {
+          type: 'metric',
+          title: `${merchantCap} Spending Summary`,
+          items: [
+            { label: 'Total Spent', value: formatCurrency(merchantTotal) },
+            { label: 'Total Allocated Budget', value: formatCurrency(totalAllocatedBudget) },
+            { label: 'Remaining Balance', value: formatCurrency(Math.max(0, totalAllocatedBudget - monthTotal)) }
+          ]
+        }
+      };
+    }
+
+    // 2. Over Budget Queries ("am i over budget", "over budget")
+    if (q.includes('over budget') || q.includes('am i over') || q.includes('budget exceeded')) {
+      const remaining = totalAllocatedBudget - monthTotal;
+      const isOver = remaining < 0;
+
+      return {
+        id: `msg-${Date.now()}`,
+        sender: 'assistant',
+        text: isOver
+          ? `⚠️ **Yes, you are currently over budget!** You have spent **${formatCurrency(monthTotal)}**, which exceeds your total monthly limit of **${formatCurrency(totalAllocatedBudget)}** by **${formatCurrency(Math.abs(remaining))}**.`
+          : `✅ **No, you are on track!** You are **${formatCurrency(remaining)} under budget** this month. Total spent so far is **${formatCurrency(monthTotal)}** out of your **${formatCurrency(totalAllocatedBudget)}** limit.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cardData: {
+          type: 'metric',
+          title: 'Budget Status Assessment',
+          items: [
+            { label: 'Total Spent', value: formatCurrency(monthTotal) },
+            { label: 'Allocated Limit', value: formatCurrency(totalAllocatedBudget) },
+            { label: 'Status', value: isOver ? 'OVER BUDGET' : 'ON TRACK' }
+          ]
+        }
+      };
+    }
+
+    // 3. Total Spending Queries ("how much did i spend", "total spending", "month spending")
     if (q.includes('how much') && (q.includes('spend') || q.includes('total') || q.includes('month'))) {
       return {
         id: `msg-${Date.now()}`,
@@ -525,7 +586,7 @@ export class AIFinanceService {
       };
     }
 
-    // 2. Affordability Queries ("can i afford", "can i buy", "should i buy")
+    // 4. Affordability Queries ("can i afford", "can i buy", "should i buy")
     const affordMatch = q.match(/(?:can i afford|can i buy|should i buy|afford)\s*(?:a|an)?\s*(?:₹|rs\.?)?\s*(\d+)/i);
     if (affordMatch) {
       const itemCost = parseFloat(affordMatch[1]);
@@ -557,13 +618,13 @@ export class AIFinanceService {
       }
     }
 
-    // 3. Category Specific Queries
+    // 5. Category Specific Queries
     let matchedCat: Category | null = null;
-    if (q.includes('food') || q.includes('swiggy') || q.includes('zomato') || q.includes('dining')) matchedCat = 'Food & Dining';
-    else if (q.includes('transport') || q.includes('uber') || q.includes('ola') || q.includes('cab')) matchedCat = 'Transportation';
-    else if (q.includes('shopping') || q.includes('amazon') || q.includes('clothes')) matchedCat = 'Shopping & Retail';
+    if (q.includes('food') || q.includes('dining')) matchedCat = 'Food & Dining';
+    else if (q.includes('transport') || q.includes('cab')) matchedCat = 'Transportation';
+    else if (q.includes('shopping') || q.includes('clothes')) matchedCat = 'Shopping & Retail';
     else if (q.includes('bills') || q.includes('electricity') || q.includes('recharge')) matchedCat = 'Bills & Utilities';
-    else if (q.includes('movie') || q.includes('netflix') || q.includes('entertainment')) matchedCat = 'Entertainment';
+    else if (q.includes('movie') || q.includes('entertainment')) matchedCat = 'Entertainment';
 
     if (matchedCat) {
       const catExpenses = monthExpenses.filter(e => e.category === matchedCat);

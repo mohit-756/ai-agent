@@ -13,6 +13,52 @@
   .animate-spin-slow {
     animation: spinSlow 12s linear infinite;
   }
+
+  /* Micro-Interaction Utility Classes */
+  .hover-transition {
+    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn-press {
+    transition: transform 200ms ease;
+  }
+  .btn-press:active {
+    transform: scale(0.97);
+  }
+
+  .card-lift {
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+
+  .input-glow {
+    transition: all 200ms ease;
+  }
+  .input-glow:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+    border-color: #7C3AED;
+  }
+
+  .sidebar-active-indicator {
+    position: relative;
+  }
+  .sidebar-active-indicator::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 20px;
+    background-color: #7C3AED;
+    border-top-right-radius: 9999px;
+    border-bottom-right-radius: 9999px;
+  }
 }
 
 /* Custom Scrollbars */
@@ -44,57 +90,19 @@
 .theme-mono .bg-slate-900\/20,
 .theme-mono .bg-slate-950\/40,
 .theme-mono .bg-slate-950\/50,
-.theme-mono .bg-slate-950\/60,
-.theme-mono .bg-slate-950\/80,
-.theme-mono .bg-slate-900 {
+.theme-mono .bg-\[\#12182B\] {
   background-color: #0a0a0a !important;
   background-image: none !important;
   backdrop-filter: none !important;
 }
 
-.theme-mono .border-slate-900,
-.theme-mono .border-slate-800,
-.theme-mono .border-slate-700,
-.theme-mono .border-slate-900\/50,
-.theme-mono .border-slate-900\/80 {
+.theme-mono .border-\[\#24304A\],
+.theme-mono .border-white\/\[0\.08\] {
   border-color: #1a1a1a !important;
 }
 
 .theme-mono .text-indigo-400,
 .theme-mono .text-purple-400,
-.theme-mono .text-pink-400,
-.theme-mono .text-indigo-300,
-.theme-mono .text-indigo-200 {
+.theme-mono .text-pink-400 {
   color: #ffffff !important;
 }
-
-.theme-mono .bg-indigo-500\/10,
-.theme-mono .bg-purple-500\/10,
-.theme-mono .bg-indigo-500\/20,
-.theme-mono .bg-purple-500\/5,
-.theme-mono .bg-indigo-500\/5,
-.theme-mono .bg-emerald-500\/5,
-.theme-mono .bg-emerald-500\/10 {
-  background-color: #1e1e1e !important;
-  color: #ffffff !important;
-  border-color: #2e2e2e !important;
-}
-
-.theme-mono .from-indigo-500,
-.theme-mono .via-purple-500,
-.theme-mono .to-pink-500,
-.theme-mono .from-indigo-600,
-.theme-mono .to-pink-600,
-.theme-mono .bg-gradient-to-r,
-.theme-mono .bg-gradient-to-tr {
-  background-image: none !important;
-  background-color: #ffffff !important;
-  color: #000000 !important;
-}
-
-.theme-mono .shadow-lg,
-.theme-mono .shadow-md,
-.theme-mono .shadow-xl {
-  box-shadow: none !important;
-}
-

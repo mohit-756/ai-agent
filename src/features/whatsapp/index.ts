@@ -1,0 +1,1 @@
+export { WhatsAppHubView } from './WhatsAppHubView';

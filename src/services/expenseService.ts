@@ -252,7 +252,11 @@ export class ExpenseService {
         });
       });
     }
-
     return INITIAL_TRANSACTIONS;
+  }
+
+  public static clearAllExpenses(): Expense[] {
+    this.saveExpenses([]);
+    return [];
   }
 }
