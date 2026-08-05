@@ -1,6 +1,7 @@
 import type { Budget, BudgetStatus, Category, Expense } from '../types/expense';
 
 const BUDGETS_STORAGE_KEY = 'ai_expense_tracker_budgets';
+const DAILY_LIMIT_STORAGE_KEY = 'spendwise_daily_limit';
 
 const DEFAULT_BUDGETS: Budget[] = [
   { category: 'Food & Dining', allocatedAmount: 8000, period: 'monthly' },
@@ -32,6 +33,26 @@ export class BudgetService {
 
   public static saveBudgets(budgets: Budget[]): void {
     localStorage.setItem(BUDGETS_STORAGE_KEY, JSON.stringify(budgets));
+  }
+
+  public static getDailyLimit(): number {
+    try {
+      const stored = localStorage.getItem(DAILY_LIMIT_STORAGE_KEY);
+      return stored ? parseFloat(stored) : 1500; // Default ₹1,500/day
+    } catch {
+      return 1500;
+    }
+  }
+
+  public static setDailyLimit(limit: number): void {
+    localStorage.setItem(DAILY_LIMIT_STORAGE_KEY, limit.toString());
+  }
+
+  public static getTodaySpending(expenses: Expense[]): number {
+    const todayStr = new Date().toISOString().split('T')[0];
+    return expenses
+      .filter(e => e.date === todayStr && e.type !== 'income' && e.category !== 'Income')
+      .reduce((sum, e) => sum + e.amount, 0);
   }
 
   public static updateCategoryBudget(category: Category, allocatedAmount: number): Budget[] {

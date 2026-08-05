@@ -10,10 +10,10 @@ interface WhatsAppHubViewProps {
 
 const SAMPLE_WA_PROMPTS = [
   "Spent ₹250 on Swiggy lunch",
+  "Set daily limit ₹1500",
+  "Remind budget",
   "Uber auto ₹180 via UPI",
-  "Paid ₹1850 for BESCOM electricity bill",
-  "How much did I spend this month?",
-  "Where am I spending the most?"
+  "Paid ₹1850 for BESCOM bill"
 ];
 
 export const WhatsAppHubView: React.FC<WhatsAppHubViewProps> = ({ onExpenseAddedByWhatsApp }) => {

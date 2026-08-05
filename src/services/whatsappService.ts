@@ -43,6 +43,7 @@ export class WhatsAppService {
     addedExpense?: Expense;
   } {
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const lowerText = userText.toLowerCase().trim();
     
     // 1. User Message
     const userMessage: WhatsAppMessage = {
@@ -53,64 +54,105 @@ export class WhatsAppService {
       status: 'read'
     };
 
-    // 2. Parse using AI Engine
-    const peerParsed = AIFinanceService.parseNaturalLanguagePeerRecord(userText);
-    const parsed = AIFinanceService.parseNaturalLanguageExpense(userText);
     let botResponseBody = '';
     let addedExpense: Expense | undefined = undefined;
 
-    if (peerParsed.isPeerRecord && peerParsed.amount && peerParsed.peerName) {
-      // Auto Add Peer Record
-      PeerService.addPeerRecord({
-        name: peerParsed.peerName,
-        originalAmount: peerParsed.amount,
-        type: peerParsed.type || 'lent',
-        description: peerParsed.description || 'WhatsApp Entry',
-        date: peerParsed.date || new Date().toISOString().split('T')[0],
-        dueDate: peerParsed.dueDate
-      });
+    // Command Check: Set Daily Limit (e.g. "set daily limit ₹1500" or "daily limit 1500")
+    const dailyLimitMatch = lowerText.match(/(?:set\s+)?daily\s+limit\s*(?:of|to)?\s*(?:₹|rs\.?)?\s*(\d+)/i);
+    if (dailyLimitMatch) {
+      const newLimit = parseFloat(dailyLimitMatch[1]);
+      if (newLimit > 0) {
+        BudgetService.setDailyLimit(newLimit);
+        botResponseBody = `⚙️ *Daily Limit Updated!*\n\nYour daily spending cap is now set to *${formatCurrency(newLimit)}/day*. You'll receive automated alerts whenever your daily purchases exceed this cap.`;
+      }
+    }
 
-      botResponseBody = `👥 *Peer Ledger Record Added!*\n\n` +
-        `• *Person:* ${peerParsed.peerName}\n` +
-        `• *Type:* ${peerParsed.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
-        `• *Amount:* ${formatCurrency(peerParsed.amount)}\n` +
-        `• *Description:* ${peerParsed.description}\n` +
-        `• *Date Taken:* ${peerParsed.date}\n` +
-        (peerParsed.dueDate ? `⏰ *Due Date:* ${peerParsed.dueDate}\n` : '') +
-        `\nOutstanding balance updated in Peer Ledger!`;
-
-    } else if (parsed.amount && parsed.amount > 0) {
-      // Auto Add Expense
-      addedExpense = ExpenseService.addExpense({
-        amount: parsed.amount,
-        category: parsed.category,
-        description: parsed.description || 'WhatsApp Entry',
-        merchant: parsed.merchant,
-        paymentMethod: parsed.paymentMethod,
-        date: parsed.date,
-        notes: 'Added via WhatsApp Bot'
-      });
-
-      // Get updated category budget status
+    // Command Check: Budget Status / Remind Budget
+    if (!botResponseBody && (lowerText.includes('remind budget') || lowerText.includes('budget status') || lowerText === 'budgets')) {
       const allExpenses = ExpenseService.getExpenses();
       const budgetStatuses = BudgetService.getBudgetStatuses(allExpenses);
-      const catStatus = budgetStatuses.find(b => b.category === parsed.category);
+      const dailyLimit = BudgetService.getDailyLimit();
+      const todaySpent = BudgetService.getTodaySpending(allExpenses);
 
-      botResponseBody = `✅ *Recorded Expense!*\n\n` +
-        `• *Amount:* ${formatCurrency(parsed.amount)}\n` +
-        `• *Description:* ${parsed.description}\n` +
-        `• *Category:* ${parsed.category}\n` +
-        `• *Payment:* ${parsed.paymentMethod}\n\n` +
-        (catStatus ? `📊 *${parsed.category} Budget:* ${formatCurrency(catStatus.spent)} / ${formatCurrency(catStatus.allocated)} (${catStatus.percentage}% used).` : '');
+      const statusLines = budgetStatuses
+        .map(b => `• *${b.category}:* ${formatCurrency(b.spent)} / ${formatCurrency(b.allocated)} (${b.percentage}%) ${b.percentage >= 100 ? '🚨' : b.percentage >= 75 ? '⚠️' : '✅'}`)
+        .join('\n');
 
-    } else {
-      // Treat as financial query
-      const allExpenses = ExpenseService.getExpenses();
-      const budgets = BudgetService.getBudgets();
-      const assistantRes = AIFinanceService.queryExpenseAssistant(userText, allExpenses, budgets);
-      
-      // Clean markdown formatting for WhatsApp bold syntax
-      botResponseBody = assistantRes.text;
+      botResponseBody = `📊 *SpendWise Budget & Reminder Status*\n\n` +
+        `🗓 *Daily Limit:* ${formatCurrency(todaySpent)} / ${formatCurrency(dailyLimit)} spent today ${todaySpent > dailyLimit ? '🚨 EXCEEDED' : '✅'}\n\n` +
+        `📁 *Monthly Categories:*\n${statusLines}\n\n` +
+        `Send e.g. "set daily limit 2000" to change daily cap!`;
+    }
+
+    if (!botResponseBody) {
+      // 2. Parse using AI Engine for Peer or Expense
+      const peerParsed = AIFinanceService.parseNaturalLanguagePeerRecord(userText);
+      const parsed = AIFinanceService.parseNaturalLanguageExpense(userText);
+
+      if (peerParsed.isPeerRecord && peerParsed.amount && peerParsed.peerName) {
+        // Auto Add Peer Record
+        PeerService.addPeerRecord({
+          name: peerParsed.peerName,
+          originalAmount: peerParsed.amount,
+          type: peerParsed.type || 'lent',
+          description: peerParsed.description || 'WhatsApp Entry',
+          date: peerParsed.date || new Date().toISOString().split('T')[0],
+          dueDate: peerParsed.dueDate
+        });
+
+        botResponseBody = `👥 *Peer Ledger Record Added!*\n\n` +
+          `• *Person:* ${peerParsed.peerName}\n` +
+          `• *Type:* ${peerParsed.type === 'lent' ? 'You Lent Money ↗' : 'You Borrowed Money ↘'}\n` +
+          `• *Amount:* ${formatCurrency(peerParsed.amount)}\n` +
+          `• *Description:* ${peerParsed.description}\n` +
+          `• *Date Taken:* ${peerParsed.date}\n` +
+          (peerParsed.dueDate ? `⏰ *Due Date:* ${peerParsed.dueDate}\n` : '') +
+          `\nOutstanding balance updated in Peer Ledger!`;
+
+      } else if (parsed.amount && parsed.amount > 0) {
+        // Auto Add Expense
+        addedExpense = ExpenseService.addExpense({
+          amount: parsed.amount,
+          category: parsed.category,
+          description: parsed.description || 'WhatsApp Entry',
+          merchant: parsed.merchant,
+          paymentMethod: parsed.paymentMethod,
+          date: parsed.date,
+          notes: 'Added via WhatsApp Bot'
+        });
+
+        // Get updated category & daily budget status
+        const allExpenses = ExpenseService.getExpenses();
+        const budgetStatuses = BudgetService.getBudgetStatuses(allExpenses);
+        const catStatus = budgetStatuses.find(b => b.category === parsed.category);
+        const dailyLimit = BudgetService.getDailyLimit();
+        const todaySpent = BudgetService.getTodaySpending(allExpenses);
+
+        let alertNotes = '';
+        if (todaySpent > dailyLimit) {
+          alertNotes += `\n\n🚨 *DAILY LIMIT ALERT:* You've spent ${formatCurrency(todaySpent)} today, exceeding your daily cap of ${formatCurrency(dailyLimit)} by ${formatCurrency(todaySpent - dailyLimit)}!`;
+        }
+        if (catStatus && catStatus.percentage >= 100) {
+          alertNotes += `\n\n🔔 *BUDGET EXCEEDED REMINDER:* ${parsed.category} has exceeded its monthly limit (${catStatus.percentage}% used)!`;
+        } else if (catStatus && catStatus.percentage >= 75) {
+          alertNotes += `\n\n⚠️ *BUDGET WARNING:* ${parsed.category} is at ${catStatus.percentage}% of its limit!`;
+        }
+
+        botResponseBody = `✅ *Recorded Expense!*\n\n` +
+          `• *Amount:* ${formatCurrency(parsed.amount)}\n` +
+          `• *Description:* ${parsed.description}\n` +
+          `• *Category:* ${parsed.category}\n` +
+          `• *Payment:* ${parsed.paymentMethod}\n\n` +
+          (catStatus ? `📊 *${parsed.category} Budget:* ${formatCurrency(catStatus.spent)} / ${formatCurrency(catStatus.allocated)} (${catStatus.percentage}% used).` : '') +
+          alertNotes;
+
+      } else {
+        // Treat as financial query
+        const allExpenses = ExpenseService.getExpenses();
+        const budgets = BudgetService.getBudgets();
+        const assistantRes = AIFinanceService.queryExpenseAssistant(userText, allExpenses, budgets);
+        botResponseBody = assistantRes.text;
+      }
     }
 
     const botResponse: WhatsAppMessage = {
