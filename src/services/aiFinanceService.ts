@@ -49,8 +49,8 @@ export class AIFinanceService {
     const isIdea = /\b(idea|thought|feature|project|concept|what if)\b/i.test(lower);
     const isNote = /\b(note|memo|remember|journal|log|met|discussed)\b/i.test(lower);
 
-    // If it has monetary amount (e.g. ₹250 or spent 500), it's financial
-    const hasMoneyAmount = /(?:₹|rs\.?|inr)\s*\d+|\d+\s*(?:rs|rupees|inr|₹)/i.test(lower) || /\b(spent|paid|borrowed|lent)\b/i.test(lower);
+    // If it has monetary amount (e.g. ₹250, 35k, spent 500, income 35k), it's financial
+    const hasMoneyAmount = /(?:₹|rs\.?|inr)\s*\d+|\d+\s*(?:rs|rupees|inr|₹|k|l|lakh)\b/i.test(lower) || /\b(spent|paid|borrowed|lent|income|budget|credited|salary)\b/i.test(lower);
 
     if ((isReminder || isTask || isIdea || isNote) && !hasMoneyAmount) {
       let category: 'note' | 'reminder' | 'idea' | 'task' = 'note';
@@ -105,7 +105,7 @@ export class AIFinanceService {
 
     // 2. Income Detection
     const lower = trimmed.toLowerCase();
-    const isIncome = /\b(credited|received|deposit|deposited|salary|cashback|earned|freelance|paycheck|bonus)\b/i.test(lower);
+    const isIncome = /\b(income|credited|received|deposit|deposited|salary|cashback|earned|freelance|paycheck|bonus)\b/i.test(lower);
     const type: 'expense' | 'income' = isIncome ? 'income' : 'expense';
 
     // 3. Category Auto Detection
